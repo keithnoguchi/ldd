@@ -6,3 +6,8 @@ all default: modules
 install: modules_install
 modules modules_install help clean:
 	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
+# kernel selftest based unittest
+run_tests clean_tests:
+	$(MAKE) top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests	\
+		CFLAGS="-I$(KERNDIR)/tools/testing/selftests"	\
+		-C ./tests/ $@
