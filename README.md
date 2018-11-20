@@ -1,23 +1,30 @@
 # Linux Device Driver in Action
 
-[LDD], and [LKD], in action!
+[LDD] and [LKD] in action!
 
 ## Build
+
+`make` will build the `ldd.ko` kernel module for you.
 
 ```sh
 make
 ```
 
-## Load & Test
+## Test
+
+`sudo make test` will load the module and unit test it for you.
 
 ```sh
 sudo make test
 ```
 
-## Unload and Cleanup
+## Cleanup
+
+`sudo make test` will unload the module and cleanup the local
+build environment for you.
 
 ```sh
-sudo make distclean
+sudo make clean
 ```
 
 Happy Hacking!

@@ -4,6 +4,9 @@
 #include <linux/module.h>
 #include <linux/device.h>
 
+int scull_register(void);
+void scull_unregister(void);
+
 /* ldd_bus_type is the top level virtual bus which hosts
  * all the ldd devices. */
 static struct bus_type ldd_bus_type = {
@@ -17,15 +20,23 @@ static int ldd_init(void)
 	printk(KERN_INFO "Welcome to the wonderful kernel world!\n");
 	err = bus_register(&ldd_bus_type);
 	if (err < 0)
-		return err;
+		goto out;
+	err = scull_register();
+	if (err < 0)
+		goto out_bus;
 	return 0;
+out_bus:
+	bus_unregister(&ldd_bus_type);
+out:
+	return err;
 }
 module_init(ldd_init);
 
 static void ldd_exit(void)
 {
-	printk(KERN_INFO "Have a wonderful day!\n");
+	scull_unregister();
 	bus_unregister(&ldd_bus_type);
+	printk(KERN_INFO "Have a wonderful day!\n");
 }
 module_exit(ldd_exit);
 
