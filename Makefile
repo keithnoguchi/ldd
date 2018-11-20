@@ -4,10 +4,12 @@ ldd-objs := main.o
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install
-modules modules_install help clean:
+modules modules_install help:
 	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
-# kernel selftest based unittest
-run_tests clean_tests:
-	$(MAKE) top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests	\
-		CFLAGS="-I$(KERNDIR)/tools/testing/selftests"	\
-		-C ./tests/ $@
+clean:
+	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
+	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests $@
+test: modules run_tests
+run_tests:
+	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests \
+		CFLAGS="-I$(KERNDIR)/tools/testing/selftests -I$(shell pwd)" $@
