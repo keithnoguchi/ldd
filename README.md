@@ -2,6 +2,24 @@
 
 [LDD], and [LKD], in action!
 
+## Build
+
+```sh
+make
+```
+
+## Load & Test
+
+```sh
+sudo make test
+```
+
+## Unload and Cleanup
+
+```sh
+sudo make distclean
+```
+
 Happy Hacking!
 
 [LDD]: https://lwn.net/Kernel/LDD3
