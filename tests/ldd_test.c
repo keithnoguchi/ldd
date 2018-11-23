@@ -17,6 +17,15 @@ static int test_opendir(const char *path)
 	return 0;
 }
 
+static int test_not_opendir(const char *path)
+{
+	DIR *dir = opendir(path);
+	if (dir == NULL)
+		return 0;
+	closedir(dir);
+	return EEXIST;
+}
+
 static int test_open_file_read_only(const char *path)
 {
 	int fd = open(path, O_RDONLY);
@@ -110,6 +119,51 @@ int main(void)
 			.name	= "scull1 device uevent file, under ldd bus",
 			.path	= "/sys/bus/ldd/devices/scull1/uevent",
 			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scullX device directory",
+			.path	= "/sys/devices/scullX",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scullX device uevent file",
+			.path	= "/sys/devices/scullX/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scullX device subsystem directory",
+			.path	= "/sys/devices/scullX/subsystem",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scullX device directory, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scullX",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scullX device uevent file, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scullX/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull driver directory",
+			.path	= "/sys/bus/ldd/drivers/scull",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull0 device under scull driver",
+			.path	= "/sys/bus/ldd/drivers/scull/scull0",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull1 device under scull driver",
+			.path	= "/sys/bus/ldd/drivers/scull/scull1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "should not scullX device under scull driver",
+			.path	= "/sys/bus/ldd/drivers/scull/scullX",
+			.func	= test_not_opendir,
 		},
 		{},	/* sentry */
 	};

@@ -13,7 +13,16 @@ static struct device devices[] = {
 		.init_name	= "scull1",
 		.release	= ldd_release_device,
 	},
+	{
+		.init_name	= "scullX",
+		.release	= ldd_release_device,
+	},
 	{}, /* sentry */
+};
+
+/* Scull driver. */
+static struct device_driver driver = {
+	.name	= "scull",
 };
 
 int scull_register(void)
@@ -21,7 +30,6 @@ int scull_register(void)
 	struct device *dev, *dev_err = NULL;
 	int err;
 
-	printk(KERN_INFO "Let's add scull devices\n");
 	for (dev = &devices[0]; dev->init_name; dev++) {
 		err = ldd_register_device(dev);
 		if (err) {
@@ -29,6 +37,9 @@ int scull_register(void)
 			goto out;
 		}
 	}
+	err = ldd_register_driver(&driver);
+	if (err)
+		dev_err = devices;
 out:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++)
@@ -40,7 +51,7 @@ void scull_unregister(void)
 {
 	struct device *dev;
 
-	printk(KERN_INFO "Let's cleanup scull devices\n");
+	ldd_unregister_driver(&driver);
 	for (dev = &devices[0]; dev_name(dev); dev++)
 		ldd_unregister_device(dev);
 }
