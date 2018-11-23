@@ -15,6 +15,7 @@ static struct device_driver driver = {
 
 /* Scull devices */
 static struct scull_device {
+	size_t		size;
 	struct device	dev;
 	struct cdev	cdev;
 } devices[] = {
@@ -46,6 +47,9 @@ static int scull_open(struct inode *i, struct file *f)
 	if (drv != &driver)
 		return -ENODEV;
 	f->private_data = d;
+	/* truncate the device size if it's write only or truncated */
+	if (f->f_flags & O_WRONLY || f->f_flags & O_TRUNC)
+		d->size = 0;
 	return 0;
 }
 
@@ -58,7 +62,10 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
+	struct scull_device *d = f->private_data;
 	*pos += len;
+	if (*pos > d->size)
+		d->size = *pos;
 	return len;
 }
 
@@ -78,6 +85,18 @@ static const struct file_operations scull_fops = {
 	.read		= scull_read,
 	.write		= scull_write,
 	.release	= scull_release,
+};
+
+static ssize_t scull_show_size(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
+}
+
+static const struct device_attribute scull_attr_size = {
+	.attr.name	= "size",
+	.attr.mode	= S_IRUGO,
+	.show		= scull_show_size,
 };
 
 int scull_register(void)
@@ -104,6 +123,11 @@ int scull_register(void)
 			dev_err = --dev;
 			goto out;
 		}
+		err = device_create_file(&dev->dev, &scull_attr_size);
+		if (err) {
+			dev_err = --dev;
+			goto out;
+		}
 		cdev_init(&dev->cdev, &scull_fops);
 		cdev_set_parent(&dev->cdev, &dev->dev.kobj);
 		err = cdev_add(&dev->cdev, dev->dev.devt, 1);
@@ -117,6 +141,7 @@ out:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++) {
 			cdev_del(&dev->cdev);
+			device_remove_file(&dev->dev, &scull_attr_size);
 			ldd_unregister_device(&dev->dev);
 		}
 	if (MAJOR(devices[0].dev.devt))
@@ -131,6 +156,7 @@ void scull_unregister(void)
 
 	for (dev = &devices[0]; dev_name(&dev->dev); dev++) {
 		cdev_del(&dev->cdev);
+		device_remove_file(&dev->dev, &scull_attr_size);
 		ldd_unregister_device(&dev->dev);
 	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));

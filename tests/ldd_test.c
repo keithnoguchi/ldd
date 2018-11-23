@@ -121,6 +121,38 @@ out:
 	return err;
 }
 
+static int test_size(const char *path, size_t want)
+{
+	char buf[BUFSIZ];
+	int err = 0;
+	int ret;
+	int fd;
+
+	fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		err = errno;
+		goto out;
+	}
+	ret = read(fd, buf, sizeof(buf));
+	if (ret == -1) {
+		err = errno;
+		goto out;
+	}
+	ret = strtol(buf, NULL, 10);
+	if (ret == -1) {
+		err = errno;
+		goto out;
+	}
+	if (ret != want) {
+		err = EINVAL;
+		goto out;
+	}
+out:
+	if (fd != -1)
+		close(fd);
+	return err;
+}
+
 static int test_writen(const char *path, size_t len, int n)
 {
 	char *buf = NULL;
@@ -147,7 +179,6 @@ static int test_writen(const char *path, size_t len, int n)
 				err = errno;
 				goto out;
 			}
-			printf("%ld=write(%s:%d)\n", ret, path, len-pos);
 			pos += ret;
 		}
 	}
@@ -344,93 +375,114 @@ static int test_io(void)
 {
 	const struct test {
 		const char	*name;
-		const char	*path;
+		const char	*dev;
 		size_t		len;
 		int		count;
 		const int	(*func)(const char *name, size_t len, int count);
 	} tests[] = {
 		{
-			.name	= "Write 0 byte to /dev/scull0",
-			.path	= "/dev/scull0",
-			.len	= 0,
-			.count	= 1,
+			.name	= "Write 8KiB to /dev/scull0",
+			.dev	= "scull0",
+			.len	= 4096,
+			.count	= 2,
 			.func	= test_writen,
 		},
 		{
-			.name	= "Write 0 byte to /dev/scull1",
-			.path	= "/dev/scull1",
-			.len	= 0,
-			.count	= 1,
+			.name	= "Write 8KiB to /dev/scull1",
+			.dev	= "scull1",
+			.len	= 4096,
+			.count	= 2,
 			.func	= test_writen,
 		},
 		{
-			.name	= "Write 0 byte to /dev/scull2:1",
-			.path	= "/dev/scull2:1",
-			.len	= 0,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1 byte to /dev/scull0",
-			.path	= "/dev/scull0",
-			.len	= 1,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1 byte to /dev/scull1",
-			.path	= "/dev/scull1",
-			.len	= 1,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1 byte to /dev/scull2:1",
-			.path	= "/dev/scull2:1",
-			.len	= 1,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1024 bytes to /dev/scull0",
-			.path	= "/dev/scull0",
-			.len	= 1024,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1024 byte to /dev/scull1",
-			.path	= "/dev/scull1",
-			.len	= 1024,
-			.count	= 1,
-			.func	= test_writen,
-		},
-		{
-			.name	= "Write 1024 byte to /dev/scull2:1",
-			.path	= "/dev/scull2:1",
-			.len	= 1024,
-			.count	= 1,
+			.name	= "Write 8KiB to /dev/scull2:1",
+			.dev	= "scull2:1",
+			.len	= 4096,
+			.count	= 2,
 			.func	= test_writen,
 		},
 		{
 			.name	= "Write 4KiB to /dev/scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 1024,
 			.count	= 4,
 			.func	= test_writen,
 		},
 		{
 			.name	= "Write 4KiB to /dev/scull1",
-			.path	= "/dev/scull1",
+			.dev	= "scull1",
 			.len	= 1024,
 			.count	= 4,
 			.func	= test_writen,
 		},
 		{
 			.name	= "Write 4KiB to /dev/scull2:1",
-			.path	= "/dev/scull2:1",
+			.dev	= "scull2:1",
 			.len	= 1024,
 			.count	= 4,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 bytes to /dev/scull0",
+			.dev	= "scull0",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 byte to /dev/scull1",
+			.dev	= "scull1",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 byte to /dev/scull2:1",
+			.dev	= "scull2:1",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull0",
+			.dev	= "scull0",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull1",
+			.dev	= "scull1",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull2:1",
+			.dev	= "scull2:1",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 0 byte to /dev/scull0",
+			.dev	= "scull0",
+			.len	= 0,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 0 byte to /dev/scull1",
+			.dev	= "scull1",
+			.len	= 0,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 0 byte to /dev/scull2:1",
+			.dev	= "scull2:1",
+			.len	= 0,
+			.count	= 1,
 			.func	= test_writen,
 		},
 		{},	/* sentry */
@@ -439,14 +491,28 @@ static int test_io(void)
 	int fail = 0;
 
 	for (t = &tests[0]; t->name; t++) {
-		int err = (*t->func)(t->path, t->len, t->count);
+		char buf[BUFSIZ];
+		int err;
+
+		sprintf(buf, "/dev/%s", t->dev);
+		err = (*t->func)(buf, t->len, t->count);
 		if (err) {
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
 			fail++;
-		} else
-			ksft_inc_pass_cnt();
+			continue;
+		}
+		sprintf(buf, "/sys/devices/%s/size", t->dev);
+		err = test_size(buf, t->len*t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		ksft_inc_pass_cnt();
 	}
 	return fail;
 }
