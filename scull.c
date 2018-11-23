@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#include <linux/kernel.h>
 #include <linux/device.h>
+
 #include "ldd.h"
 
 /* Scull devices */
@@ -26,6 +26,7 @@ static struct device devices[] = {
 
 /* Scull driver */
 static struct device_driver driver = {
+	.owner	= THIS_MODULE,
 	.name	= "scull",
 };
 
