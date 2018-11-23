@@ -45,8 +45,21 @@ static int scull_open(struct inode *i, struct file *f)
 	drv = d->dev.driver;
 	if (drv != &driver)
 		return -ENODEV;
+	f->private_data = d;
+	return 0;
+}
 
-	printk(KERN_INFO "open(%s:%s)\n", drv->name, dev_name(&d->dev));
+static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
+{
+	struct scull_device *d = f->private_data;
+	printk(KERN_INFO "read(%s:%s)\n", d->dev.driver->name, dev_name(&d->dev));
+	return  0;
+}
+
+static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
+{
+	struct scull_device *d = f->private_data;
+	printk(KERN_INFO "write(%s:%s)\n", d->dev.driver->name, dev_name(&d->dev));
 	return 0;
 }
 
@@ -58,13 +71,13 @@ static int scull_release(struct inode *i, struct file *f)
 	drv = d->dev.driver;
 	if (drv != &driver)
 		return -ENODEV;
-
-	printk(KERN_INFO "release(%s:%s)\n", drv->name, dev_name(&d->dev));
 	return 0;
 }
 
 static const struct file_operations scull_fops = {
 	.open		= scull_open,
+	.read		= scull_read,
+	.write		= scull_write,
 	.release	= scull_release,
 };
 
