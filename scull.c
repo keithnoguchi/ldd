@@ -13,6 +13,10 @@ static struct device devices[] = {
 		.init_name	= "scull1",
 		.release	= ldd_release_device,
 	},
+	{
+		.init_name	= "scull2:1",
+		.release	= ldd_release_device,
+	},
 	{	/* Dummy device */
 		.init_name	= "scullX",
 		.release	= ldd_release_device,

@@ -121,6 +121,31 @@ int main(void)
 			.func	= test_open_file_read_write,
 		},
 		{
+			.name	= "scull2:1 device directory",
+			.path	= "/sys/devices/scull2:1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull2:1 device uevent file",
+			.path	= "/sys/devices/scull2:1/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull2:1 device subsystem directory",
+			.path	= "/sys/devices/scull2:1/subsystem",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull2:1 device directory, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scull2:1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull2:1 device uevent file, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scull2:1/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
 			.name	= "scullX device directory",
 			.path	= "/sys/devices/scullX",
 			.func	= test_opendir,
@@ -158,6 +183,11 @@ int main(void)
 		{
 			.name	= "scull1 device under scull driver",
 			.path	= "/sys/bus/ldd/drivers/scull/scull1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull2:1 device under scull driver",
+			.path	= "/sys/bus/ldd/drivers/scull/scull2:1",
 			.func	= test_opendir,
 		},
 		{

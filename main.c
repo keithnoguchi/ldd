@@ -19,9 +19,9 @@ static int ldd_bus_match(struct device *dev, struct device_driver *drv)
 	/* device name is same with the driver name */
 	if (strlen(dname) == len)
 		return 1;
-	/* device name suffix must be numeric */
+	/* device name suffix only contains digit, or ":" */
 	for (suffix = (char *)&dname[len]; *suffix; suffix++)
-		if ((int)*suffix < 0x30 || (int)*suffix > 0x39)
+		if ((int)*suffix < 0x30 || (int)*suffix > 0x3A)
 			return 0;
 	return 1;
 }

@@ -10,7 +10,7 @@ modules modules_install help:
 clean: unload
 	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
 	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests $@
-test: modules modules_install load run_tests
+test: unload modules modules_install load run_tests
 run_tests:
 	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests \
 		CFLAGS="-I$(KERNDIR)/tools/testing/selftests -I$(shell pwd)" $@
