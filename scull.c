@@ -7,10 +7,16 @@
 
 #include "ldd.h"
 
+/* Scull driver */
+static struct device_driver driver = {
+	.owner	= THIS_MODULE,
+	.name	= "scull",
+};
+
 /* Scull devices */
 static struct scull_device {
-	struct cdev	cdev;
 	struct device	dev;
+	struct cdev	cdev;
 } devices[] = {
 	{
 		.dev.init_name	= "scull0",
@@ -31,19 +37,17 @@ static struct scull_device {
 	{},	/* sentry */
 };
 
-/* Scull driver */
-static struct device_driver driver = {
-	.owner	= THIS_MODULE,
-	.name	= "scull",
-};
-
 static int scull_open(struct inode *i, struct file *f)
 {
+	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
+	printk(KERN_INFO "open(%s)\n", dev_name(&d->dev));
 	return 0;
 }
 
 static int scull_release(struct inode *i, struct file *f)
 {
+	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
+	printk(KERN_INFO "release(%s)\n", dev_name(&d->dev));
 	return 0;
 }
 
@@ -59,10 +63,12 @@ int scull_register(void)
 	int err;
 	int i;
 
+	/* scull driver */
 	err = ldd_register_driver(&driver);
 	if (err)
-		goto out;
+		return err;
 
+	/* scull devices */
 	err = alloc_chrdev_region(&devt, 0, ARRAY_SIZE(devices), driver.name);
 	if (err)
 		goto out;
@@ -75,18 +81,23 @@ int scull_register(void)
 			goto out;
 		}
 		cdev_init(&dev->cdev, &scull_fops);
+		cdev_set_parent(&dev->cdev, &dev->dev.kobj);
 		err = cdev_add(&dev->cdev, dev->dev.devt, 1);
 		if (err) {
 			dev_err = dev;
 			goto out;
 		}
 	}
+	return 0;
 out:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++) {
 			cdev_del(&dev->cdev);
 			ldd_unregister_device(&dev->dev);
 		}
+	if (MAJOR(devices[0].dev.devt))
+		unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
+	ldd_unregister_driver(&driver);
 	return err;
 }
 
