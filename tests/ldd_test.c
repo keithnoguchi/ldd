@@ -161,7 +161,7 @@ int main(void)
 			.func	= test_opendir,
 		},
 		{
-			.name	= "should not scullX device under scull driver",
+			.name	= "scullX device should not be under scull driver",
 			.path	= "/sys/bus/ldd/drivers/scull/scullX",
 			.func	= test_not_opendir,
 		},

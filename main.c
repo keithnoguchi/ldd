@@ -1,16 +1,36 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#include <linux/types.h>
 #include <linux/init.h>
 #include <linux/module.h>
 #include <linux/device.h>
+#include <linux/string.h>
 
 #include "ldd.h"
 #include "scull.h"
 
+static int ldd_bus_match(struct device *dev, struct device_driver *drv)
+{
+	size_t len = strlen(drv->name);
+	const char *dname = dev_name(dev);
+	char *suffix;
+
+	/* device name prefix should be the driver name */
+	if (strncmp(dname, drv->name, len))
+		return 0;
+	/* device name is same with the driver name */
+	if (strlen(dname) == len)
+		return 1;
+	/* device name suffix must be numeric */
+	for (suffix = (char *)&dname[len]; *suffix; suffix++)
+		if ((int)*suffix < 0x30 || (int)*suffix > 0x39)
+			return 0;
+	return 1;
+}
+
 /* ldd_bus_type is the top level virtual bus which hosts
  * all the ldd devices. */
 struct bus_type ldd_bus_type = {
-	.name		= "ldd",
+	.name	= "ldd",
+	.match	= ldd_bus_match,
 };
 
 static int ldd_init(void)

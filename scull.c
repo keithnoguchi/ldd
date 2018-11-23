@@ -3,7 +3,7 @@
 #include <linux/device.h>
 #include "ldd.h"
 
-/* Scull devices. */
+/* Scull devices */
 static struct device devices[] = {
 	{
 		.init_name	= "scull0",
@@ -13,14 +13,14 @@ static struct device devices[] = {
 		.init_name	= "scull1",
 		.release	= ldd_release_device,
 	},
-	{
+	{	/* Dummy device */
 		.init_name	= "scullX",
 		.release	= ldd_release_device,
 	},
-	{}, /* sentry */
+	{},	/* sentry */
 };
 
-/* Scull driver. */
+/* Scull driver */
 static struct device_driver driver = {
 	.name	= "scull",
 };
