@@ -43,7 +43,7 @@ static int scull_open(struct inode *i, struct file *f)
 	struct device_driver *drv;
 
 	drv = d->dev.driver;
-	if (drv == NULL)
+	if (drv != &driver)
 		return -ENODEV;
 
 	printk(KERN_INFO "open(%s:%s)\n", drv->name, dev_name(&d->dev));
@@ -56,7 +56,7 @@ static int scull_release(struct inode *i, struct file *f)
 	struct device_driver *drv;
 
 	drv = d->dev.driver;
-	if (drv == NULL)
+	if (drv != &driver)
 		return -ENODEV;
 
 	printk(KERN_INFO "release(%s:%s)\n", drv->name, dev_name(&d->dev));
