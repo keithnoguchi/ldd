@@ -7,6 +7,12 @@
 #include "ldd.h"
 #include "scull.h"
 
+/* ldd_bus_type is the top level virtual bus which hosts
+ * all the ldd devices. */
+struct bus_type ldd_bus_type = {
+	.name		= "ldd",
+};
+
 static int ldd_init(void)
 {
 	int err;
