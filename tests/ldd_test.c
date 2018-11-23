@@ -86,6 +86,31 @@ int main(void)
 			.path	= "/sys/bus/ldd/devices/scull0/uevent",
 			.func	= test_open_file_read_write,
 		},
+		{
+			.name	= "scull1 device directory",
+			.path	= "/sys/devices/scull1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull1 device uevent file",
+			.path	= "/sys/devices/scull1/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull1 device subsystem directory",
+			.path	= "/sys/devices/scull1/subsystem",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull1 device directory, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scull1",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull1 device uevent file, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scull1/uevent",
+			.func	= test_open_file_read_write,
+		},
 		{},	/* sentry */
 	};
 	struct test *t;
