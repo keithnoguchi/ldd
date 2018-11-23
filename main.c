@@ -4,14 +4,8 @@
 #include <linux/module.h>
 #include <linux/device.h>
 
-int scull_register(void);
-void scull_unregister(void);
-
-/* ldd_bus_type is the top level virtual bus which hosts
- * all the ldd devices. */
-static struct bus_type ldd_bus_type = {
-	.name		= "ldd",
-};
+#include "ldd.h"
+#include "scull.h"
 
 static int ldd_init(void)
 {
