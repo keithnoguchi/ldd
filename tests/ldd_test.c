@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+#include <unistd.h>
 #include "kselftest.h"
 
 static int test_opendir(const char *path)
@@ -80,13 +81,90 @@ static int test_no_open_file_read_write(const char *path)
 	return ENODEV;
 }
 
-
-int main(void)
+static int test_readn(const char *path, size_t len, int n)
 {
-	struct test {
+	char *buf = NULL;
+	int err = 0;
+	int pos;
+	int fd;
+	int i;
+
+	fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		err = errno;
+		goto out;
+	}
+
+	buf = malloc(len);
+	if (!buf) {
+		int err = errno;
+		goto out;
+	}
+
+	for (i = 0; i < n; i++) {
+		pos = 0;
+		while (pos < len) {
+			ssize_t ret = read(fd, buf+pos, len-pos);
+			if (ret == -1) {
+				int err = errno;
+				goto out;
+			}
+			printf("%ld = read(%s:%d)\n", ret, path, len-pos);
+			pos += ret;
+		}
+	}
+out:
+	if (buf)
+		free(buf);
+	if (fd != -1)
+		close(fd);
+	return err;
+}
+
+static int test_writen(const char *path, size_t len, int n)
+{
+	char *buf = NULL;
+	int err = 0;
+	int pos;
+	int fd;
+	int i;
+
+	fd = open(path, O_WRONLY);
+	if (fd == -1) {
+		err = errno;
+		goto out;
+	}
+	buf = malloc(len);
+	if (!buf) {
+		err = errno;
+		goto out;
+	}
+	for (i = 0; i < n; i++) {
+		pos = 0;
+		while (pos < len) {
+			ssize_t ret = write(fd, buf+pos, len-pos);
+			if (ret == -1) {
+				err = errno;
+				goto out;
+			}
+			printf("%ld=write(%s:%d)\n", ret, path, len-pos);
+			pos += ret;
+		}
+	}
+out:
+	if (buf)
+		free(buf);
+	if (fd != -1)
+		close(fd);
+	return err;
+}
+
+static int test_open(void)
+{
+	const struct test {
 		const char	*name;
 		const char	*path;
-		int		(*func)(const char *path);
+		const int	(*func)(const char *path);
 	} tests[] = {
 		{
 			.name	= "ldd bus directory",
@@ -245,7 +323,7 @@ int main(void)
 		},
 		{},	/* sentry */
 	};
-	struct test *t;
+	const struct test *t;
 	int fail = 0;
 	int err;
 
@@ -259,6 +337,126 @@ int main(void)
 		} else
 			ksft_inc_pass_cnt();
 	}
+	return fail;
+}
+
+static int test_io(void)
+{
+	const struct test {
+		const char	*name;
+		const char	*path;
+		size_t		len;
+		int		count;
+		const int	(*func)(const char *name, size_t len, int count);
+	} tests[] = {
+		{
+			.name	= "Write 0 byte to /dev/scull0",
+			.path	= "/dev/scull0",
+			.len	= 0,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 0 byte to /dev/scull1",
+			.path	= "/dev/scull1",
+			.len	= 0,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 0 byte to /dev/scull2:1",
+			.path	= "/dev/scull2:1",
+			.len	= 0,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull0",
+			.path	= "/dev/scull0",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull1",
+			.path	= "/dev/scull1",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1 byte to /dev/scull2:1",
+			.path	= "/dev/scull2:1",
+			.len	= 1,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 bytes to /dev/scull0",
+			.path	= "/dev/scull0",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 byte to /dev/scull1",
+			.path	= "/dev/scull1",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 1024 byte to /dev/scull2:1",
+			.path	= "/dev/scull2:1",
+			.len	= 1024,
+			.count	= 1,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 4KiB to /dev/scull0",
+			.path	= "/dev/scull0",
+			.len	= 1024,
+			.count	= 4,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 4KiB to /dev/scull1",
+			.path	= "/dev/scull1",
+			.len	= 1024,
+			.count	= 4,
+			.func	= test_writen,
+		},
+		{
+			.name	= "Write 4KiB to /dev/scull2:1",
+			.path	= "/dev/scull2:1",
+			.len	= 1024,
+			.count	= 4,
+			.func	= test_writen,
+		},
+		{},	/* sentry */
+	};
+	const struct test *t;
+	int fail = 0;
+
+	for (t = &tests[0]; t->name; t++) {
+		int err = (*t->func)(t->path, t->len, t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+		} else
+			ksft_inc_pass_cnt();
+	}
+	return fail;
+}
+
+int main(void)
+{
+	int fail;
+
+	fail = test_open();
+	fail += test_io();
 	if (fail)
 		ksft_exit_fail();
 	ksft_exit_pass();

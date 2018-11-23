@@ -58,9 +58,8 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
-	struct scull_device *d = f->private_data;
-	printk(KERN_INFO "write(%s:%s)\n", d->dev.driver->name, dev_name(&d->dev));
-	return 0;
+	*pos += len;
+	return len;
 }
 
 static int scull_release(struct inode *i, struct file *f)
