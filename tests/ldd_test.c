@@ -195,6 +195,26 @@ int main(void)
 			.path	= "/sys/bus/ldd/drivers/scull/scullX",
 			.func	= test_not_opendir,
 		},
+		{
+			.name	= "scull0 device under /dev directory",
+			.path	= "/dev/scull0",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull1 device under /dev directory",
+			.path	= "/dev/scull1",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull2:1 device under /dev directory",
+			.path	= "/dev/scull2:1",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scullX device under /dev directory",
+			.path	= "/dev/scullX",
+			.func	= test_open_file_read_write,
+		},
 		{},	/* sentry */
 	};
 	struct test *t;
