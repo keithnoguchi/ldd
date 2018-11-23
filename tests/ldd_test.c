@@ -53,6 +53,34 @@ static int test_open_file_read_write(const char *path)
 	return 0;
 }
 
+static int test_no_open_file_read_only(const char *path)
+{
+	int fd = open(path, O_RDONLY);
+	if (fd == -1)
+		return 0;
+	close(fd);
+	return ENODEV;
+}
+
+static int test_no_open_file_write_only(const char *path)
+{
+	int fd = open(path, O_WRONLY);
+	if (fd == -1)
+		return 0;
+	close(fd);
+	return ENODEV;
+}
+
+static int test_no_open_file_read_write(const char *path)
+{
+	int fd = open(path, O_RDWR);
+	if (fd == -1)
+		return 0;
+	close(fd);
+	return ENODEV;
+}
+
+
 int main(void)
 {
 	struct test {
@@ -213,7 +241,7 @@ int main(void)
 		{
 			.name	= "scullX device under /dev directory",
 			.path	= "/dev/scullX",
-			.func	= test_open_file_read_write,
+			.func	= test_no_open_file_read_write,
 		},
 		{},	/* sentry */
 	};

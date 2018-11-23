@@ -40,14 +40,26 @@ static struct scull_device {
 static int scull_open(struct inode *i, struct file *f)
 {
 	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
-	printk(KERN_INFO "open(%s)\n", dev_name(&d->dev));
+	struct device_driver *drv;
+
+	drv = d->dev.driver;
+	if (drv == NULL)
+		return -ENODEV;
+
+	printk(KERN_INFO "open(%s:%s)\n", drv->name, dev_name(&d->dev));
 	return 0;
 }
 
 static int scull_release(struct inode *i, struct file *f)
 {
 	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
-	printk(KERN_INFO "release(%s)\n", dev_name(&d->dev));
+	struct device_driver *drv;
+
+	drv = d->dev.driver;
+	if (drv == NULL)
+		return -ENODEV;
+
+	printk(KERN_INFO "release(%s:%s)\n", drv->name, dev_name(&d->dev));
 	return 0;
 }
 
