@@ -63,11 +63,26 @@ int main(void)
 		},
 		{
 			.name	= "scull0 device directory",
-			.path	= "/sys/bus/ldd/devices/scull0",
+			.path	= "/sys/devices/scull0",
 			.func	= test_opendir,
 		},
 		{
 			.name	= "scull0 device uevent file",
+			.path	= "/sys/devices/scull0/uevent",
+			.func	= test_open_file_read_write,
+		},
+		{
+			.name	= "scull0 device subsystem directory",
+			.path	= "/sys/devices/scull0/subsystem",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull0 device directory, under ldd bus",
+			.path	= "/sys/bus/ldd/devices/scull0",
+			.func	= test_opendir,
+		},
+		{
+			.name	= "scull0 device uevent file, under ldd bus",
 			.path	= "/sys/bus/ldd/devices/scull0/uevent",
 			.func	= test_open_file_read_write,
 		},
