@@ -5,3 +5,4 @@ ldd.ko
 *.mod.c
 modules.*
 Module.*
+cscope.*
