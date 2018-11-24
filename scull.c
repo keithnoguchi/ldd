@@ -4,6 +4,7 @@
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/slab.h>
 
 #include "ldd.h"
 
@@ -16,6 +17,8 @@ static struct device_driver driver = {
 /* Scull devices */
 static struct scull_device {
 	size_t		size;
+	char		*buf;
+	size_t		bufsiz;
 	struct device	dev;
 	struct cdev	cdev;
 } devices[] = {
@@ -63,6 +66,17 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
+
+	/* naive buffer management */
+	if (*pos+len > d->bufsiz) {
+		if (d->buf)
+			kfree(d->buf);
+		d->bufsiz = 0;
+		d->buf = kmalloc(*pos+len, GFP_KERNEL);
+		if (IS_ERR(d->buf))
+			return PTR_ERR(d->buf);
+		d->bufsiz = *pos+len;
+	}
 	*pos += len;
 	if (*pos > d->size)
 		d->size = *pos;
@@ -95,9 +109,17 @@ static ssize_t size_show(struct device *dev, struct device_attribute *attr, char
 }
 static const DEVICE_ATTR_RO(size);
 
+static ssize_t bufsiz_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(buf, PAGE_SIZE, "%ld\n", d->bufsiz);
+}
+static const DEVICE_ATTR_RO(bufsiz);
+
 /* Scull attribute groups */
 static const struct attribute *scull_attrs[] = {
 	&dev_attr_size.attr,
+	&dev_attr_bufsiz.attr,
 	NULL,
 };
 static const struct attribute_group scull_group = {
@@ -165,6 +187,8 @@ void scull_unregister(void)
 	struct scull_device *dev;
 
 	for (dev = &devices[0]; dev_name(&dev->dev); dev++) {
+		if (dev->buf)
+			kfree(dev->buf);
 		cdev_del(&dev->cdev);
 		ldd_unregister_device(&dev->dev);
 	}

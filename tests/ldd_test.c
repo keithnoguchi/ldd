@@ -488,6 +488,7 @@ static int test_io(void)
 		{},	/* sentry */
 	};
 	const struct test *t;
+	ssize_t bufsiz = 0;
 	int fail = 0;
 
 	for (t = &tests[0]; t->name; t++) {
@@ -503,8 +504,21 @@ static int test_io(void)
 			fail++;
 			continue;
 		}
+		/* current file size test */
 		sprintf(buf, "/sys/devices/%s/size", t->dev);
 		err = test_size(buf, t->len*t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		/* bufsiz is the biggest write size ever */
+		if (bufsiz < t->len*t->count)
+			bufsiz = t->len*t->count;
+		sprintf(buf, "/sys/devices/%s/bufsiz", t->dev);
+		err = test_size(buf, bufsiz);
 		if (err) {
 			errno = err;
 			perror(t->name);
