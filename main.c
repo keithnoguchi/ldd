@@ -5,6 +5,7 @@
 #include <linux/string.h>
 
 #include "ldd.h"
+#include "scull.h"
 #include "sculld.h"
 
 static int ldd_bus_match(struct device *dev, struct device_driver *drv)
@@ -39,13 +40,18 @@ static int ldd_init(void)
 
 	printk(KERN_INFO "Welcome to the wonderful kernel world!\n");
 	err = bus_register(&ldd_bus_type);
-	if (err < 0)
+	if (err)
 		goto error;
+	err = scull_register();
+	if (err)
+		goto error_scull;
 	err = sculld_register();
-	if (err < 0)
-		goto error_bus;
+	if (err)
+		goto error_sculld;
 	return 0;
-error_bus:
+error_sculld:
+	scull_unregister();
+error_scull:
 	bus_unregister(&ldd_bus_type);
 error:
 	return err;
@@ -55,6 +61,7 @@ module_init(ldd_init);
 static void ldd_exit(void)
 {
 	sculld_unregister();
+	scull_unregister();
 	bus_unregister(&ldd_bus_type);
 	printk(KERN_INFO "Have a wonderful day!\n");
 }

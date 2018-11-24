@@ -1,6 +1,8 @@
 # SPDX-License-Idenfitier: GPL-2.0
-obj-m += ldd.o
-ldd-objs := main.o sculld.o
+obj-m    += ldd.o
+ldd-objs := main.o
+ldd-objs += scull.o
+ldd-objs += sculld.o
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install
