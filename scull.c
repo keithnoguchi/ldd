@@ -87,12 +87,32 @@ static const struct file_operations scull_fops = {
 	.release	= scull_release,
 };
 
+/* Scull attributes */
 static ssize_t size_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
 	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
 }
 static const DEVICE_ATTR_RO(size);
+
+/* Scull attribute groups */
+static const struct attribute *scull_attrs[] = {
+	&dev_attr_size.attr,
+	NULL,
+};
+static const struct attribute_group scull_group = {
+	.attrs = (struct attribute **)scull_attrs,
+};
+static const struct attribute_group *scull_groups[] = {
+	&scull_group,
+	NULL,
+};
+
+/* Scull device type */
+static struct device_type scull_device_type = {
+	.name	= "scull",
+	.groups	= scull_groups,
+};
 
 int scull_register(void)
 {
@@ -112,13 +132,9 @@ int scull_register(void)
 		goto out;
 	i = 0;
 	for (dev = &devices[0]; dev->dev.init_name; dev++) {
+		dev->dev.type = &scull_device_type;
 		dev->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+(i++));
 		err = ldd_register_device(&dev->dev);
-		if (err) {
-			dev_err = --dev;
-			goto out;
-		}
-		err = device_create_file(&dev->dev, &dev_attr_size);
 		if (err) {
 			dev_err = --dev;
 			goto out;
@@ -136,7 +152,6 @@ out:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++) {
 			cdev_del(&dev->cdev);
-			device_remove_file(&dev->dev, &dev_attr_size);
 			ldd_unregister_device(&dev->dev);
 		}
 	if (MAJOR(devices[0].dev.devt))
@@ -151,7 +166,6 @@ void scull_unregister(void)
 
 	for (dev = &devices[0]; dev_name(&dev->dev); dev++) {
 		cdev_del(&dev->cdev);
-		device_remove_file(&dev->dev, &dev_attr_size);
 		ldd_unregister_device(&dev->dev);
 	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
