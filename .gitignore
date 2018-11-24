@@ -1,0 +1,7 @@
+ldd.ko
+*_test
+*.o
+.*
+*.mod.c
+modules.*
+Module.*

@@ -8,14 +8,14 @@
 
 #include "ldd.h"
 
-/* Scull driver */
+/* Sculld driver */
 static struct device_driver driver = {
 	.owner	= THIS_MODULE,
-	.name	= "scull",
+	.name	= "sculld",
 };
 
-/* Scull devices */
-static struct scull_device {
+/* Sculld devices */
+static struct sculld_device {
 	size_t		size;
 	char		*buf;
 	size_t		bufsiz;
@@ -23,27 +23,27 @@ static struct scull_device {
 	struct cdev	cdev;
 } devices[] = {
 	{
-		.dev.init_name	= "scull0",
+		.dev.init_name	= "sculld0",
 		.dev.release	= ldd_release_device,
 	},
 	{
-		.dev.init_name	= "scull1",
+		.dev.init_name	= "sculld1",
 		.dev.release	= ldd_release_device,
 	},
 	{
-		.dev.init_name	= "scull2:1",
+		.dev.init_name	= "sculld2:1",
 		.dev.release	= ldd_release_device,
 	},
 	{	/* Dummy device */
-		.dev.init_name	= "scullX",
+		.dev.init_name	= "sculldX",
 		.dev.release	= ldd_release_device,
 	},
 	{},	/* sentry */
 };
 
-static int scull_open(struct inode *i, struct file *f)
+static int sculld_open(struct inode *i, struct file *f)
 {
-	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
+	struct sculld_device *d = container_of(i->i_cdev, struct sculld_device, cdev);
 	struct device_driver *drv;
 
 	drv = d->dev.driver;
@@ -56,16 +56,16 @@ static int scull_open(struct inode *i, struct file *f)
 	return 0;
 }
 
-static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
+static ssize_t sculld_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
-	struct scull_device *d = f->private_data;
+	struct sculld_device *d = f->private_data;
 	printk(KERN_INFO "read(%s:%s)\n", d->dev.driver->name, dev_name(&d->dev));
 	return  0;
 }
 
-static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
+static ssize_t sculld_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
-	struct scull_device *d = f->private_data;
+	struct sculld_device *d = f->private_data;
 
 	/* naive buffer management */
 	if (*pos+len > d->bufsiz) {
@@ -83,9 +83,9 @@ static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, l
 	return len;
 }
 
-static int scull_release(struct inode *i, struct file *f)
+static int sculld_release(struct inode *i, struct file *f)
 {
-	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
+	struct sculld_device *d = container_of(i->i_cdev, struct sculld_device, cdev);
 	struct device_driver *drv;
 
 	drv = d->dev.driver;
@@ -94,74 +94,74 @@ static int scull_release(struct inode *i, struct file *f)
 	return 0;
 }
 
-static const struct file_operations scull_fops = {
-	.open		= scull_open,
-	.read		= scull_read,
-	.write		= scull_write,
-	.release	= scull_release,
+static const struct file_operations sculld_fops = {
+	.open		= sculld_open,
+	.read		= sculld_read,
+	.write		= sculld_write,
+	.release	= sculld_release,
 };
 
 /* Scull attributes */
 static ssize_t size_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
 	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
 }
 static const DEVICE_ATTR_RO(size);
 
 static ssize_t bufsiz_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
 	return snprintf(buf, PAGE_SIZE, "%ld\n", d->bufsiz);
 }
 static const DEVICE_ATTR_RO(bufsiz);
 
 /* Scull attribute groups */
-static const struct attribute *scull_attrs[] = {
+static const struct attribute *sculld_attrs[] = {
 	&dev_attr_size.attr,
 	&dev_attr_bufsiz.attr,
 	NULL,
 };
-static const struct attribute_group scull_group = {
-	.attrs = (struct attribute **)scull_attrs,
+static const struct attribute_group sculld_group = {
+	.attrs = (struct attribute **)sculld_attrs,
 };
-static const struct attribute_group *scull_groups[] = {
-	&scull_group,
+static const struct attribute_group *sculld_groups[] = {
+	&sculld_group,
 	NULL,
 };
 
 /* Scull device type */
-static struct device_type scull_device_type = {
-	.name	= "scull",
-	.groups	= scull_groups,
+static struct device_type sculld_device_type = {
+	.name	= "sculld",
+	.groups	= sculld_groups,
 };
 
-int scull_register(void)
+int sculld_register(void)
 {
-	struct scull_device *dev, *dev_err = NULL;
+	struct sculld_device *dev, *dev_err = NULL;
 	dev_t devt;
 	int err;
 	int i;
 
-	/* scull driver */
+	/* sculld driver */
 	err = ldd_register_driver(&driver);
 	if (err)
 		return err;
 
-	/* scull devices */
+	/* sculld devices */
 	err = alloc_chrdev_region(&devt, 0, ARRAY_SIZE(devices), driver.name);
 	if (err)
 		goto out;
 	i = 0;
 	for (dev = &devices[0]; dev->dev.init_name; dev++) {
-		dev->dev.type = &scull_device_type;
+		dev->dev.type = &sculld_device_type;
 		dev->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+(i++));
 		err = ldd_register_device(&dev->dev);
 		if (err) {
 			dev_err = --dev;
 			goto out;
 		}
-		cdev_init(&dev->cdev, &scull_fops);
+		cdev_init(&dev->cdev, &sculld_fops);
 		cdev_set_parent(&dev->cdev, &dev->dev.kobj);
 		err = cdev_add(&dev->cdev, dev->dev.devt, 1);
 		if (err) {
@@ -182,9 +182,9 @@ out:
 	return err;
 }
 
-void scull_unregister(void)
+void sculld_unregister(void)
 {
-	struct scull_device *dev;
+	struct sculld_device *dev;
 
 	for (dev = &devices[0]; dev_name(&dev->dev); dev++) {
 		if (dev->buf)
