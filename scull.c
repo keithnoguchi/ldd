@@ -87,17 +87,12 @@ static const struct file_operations scull_fops = {
 	.release	= scull_release,
 };
 
-static ssize_t scull_show_size(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t size_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
 	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
 }
-
-static const struct device_attribute scull_attr_size = {
-	.attr.name	= "size",
-	.attr.mode	= S_IRUGO,
-	.show		= scull_show_size,
-};
+static const DEVICE_ATTR_RO(size);
 
 int scull_register(void)
 {
@@ -123,7 +118,7 @@ int scull_register(void)
 			dev_err = --dev;
 			goto out;
 		}
-		err = device_create_file(&dev->dev, &scull_attr_size);
+		err = device_create_file(&dev->dev, &dev_attr_size);
 		if (err) {
 			dev_err = --dev;
 			goto out;
@@ -141,7 +136,7 @@ out:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++) {
 			cdev_del(&dev->cdev);
-			device_remove_file(&dev->dev, &scull_attr_size);
+			device_remove_file(&dev->dev, &dev_attr_size);
 			ldd_unregister_device(&dev->dev);
 		}
 	if (MAJOR(devices[0].dev.devt))
@@ -156,7 +151,7 @@ void scull_unregister(void)
 
 	for (dev = &devices[0]; dev_name(&dev->dev); dev++) {
 		cdev_del(&dev->cdev);
-		device_remove_file(&dev->dev, &scull_attr_size);
+		device_remove_file(&dev->dev, &dev_attr_size);
 		ldd_unregister_device(&dev->dev);
 	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
