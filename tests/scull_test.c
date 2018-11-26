@@ -295,6 +295,12 @@ static int test_scull_writen(void)
 			.len	= 4096,
 			.count	= 2,
 		},
+		{
+			.name	= "write 0 byte on scull0",
+			.dev	= "scull0",
+			.len	= 0,
+			.count	= 1,
+		},
 		{},	/* sentry */
 	};
 	const struct test *t;
