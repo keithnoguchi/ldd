@@ -23,6 +23,32 @@ static struct scull_device {
 	{}, /* sentry */
 };
 
+/* Scull device attributes */
+static ssize_t pagesize_show(struct device *dev, struct device_attribute *attr,
+			     char *page)
+{
+	return snprintf(page, PAGE_SIZE, "%ld\n", PAGE_SIZE);
+}
+DEVICE_ATTR_RO(pagesize);
+
+static const struct attribute *scull_attrs[] = {
+	&dev_attr_pagesize.attr,
+	NULL,
+};
+static const struct attribute_group scull_group = {
+	.attrs	= (struct attribute **)scull_attrs,
+};
+static const struct attribute_group *scull_groups[] = {
+	&scull_group,
+	NULL,
+};
+
+static const struct device_type device_type = {
+	.name	= "scull",
+	.groups	= (const struct attribute_group **)&scull_groups,
+};
+
+/* Scull device file operations */
 static int scull_open(struct inode *i, struct file *f)
 {
 	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
@@ -56,6 +82,7 @@ static const struct file_operations scull_fops = {
 	.release	= scull_release,
 };
 
+/* Scull registration */
 int scull_register(void)
 {
 	struct scull_device *d, *d_err = NULL;
@@ -72,6 +99,7 @@ int scull_register(void)
 	for (d = devices, i = 0; d->dev.init_name; d++, i++) {
 		sema_init(&d->sem, 1);
 		d->dev.driver = &driver;
+		d->dev.type = &device_type;
 		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i);
 		device_initialize(&d->dev);
 		cdev_init(&d->cdev, &scull_fops);

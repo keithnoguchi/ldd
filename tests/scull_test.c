@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <limits.h>
 #include "kselftest.h"
 
 static int test_open(const char *path, mode_t mode)
@@ -14,6 +15,37 @@ static int test_open(const char *path, mode_t mode)
 		return errno;
 	close(fd);
 	return 0;
+}
+
+static int test_attr_readi(const char *path, int want)
+{
+	char buf[BUFSIZ];
+	int err = 0;
+	long got;
+	int fd;
+
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		return errno;
+
+	err = read(fd, buf, sizeof(buf));
+	if (err == -1) {
+		err = errno;
+		goto out;
+	}
+	got = strtol(buf, NULL, 10);
+	if (got <= LONG_MIN || got >= LONG_MAX) {
+		err = errno;
+		goto out;
+	}
+	if (got != want) {
+		err = EINVAL;
+		goto out;
+	}
+	err = 0;
+out:
+	close(fd);
+	return err;
 }
 
 static int test_readn(const char *path, size_t len, int n)
@@ -93,6 +125,36 @@ static int test_scull_open(void)
 	return fail;
 }
 
+static int test_scull_attr_readi(void)
+{
+	const struct test {
+		const char	*name;
+		const char	*path;
+		long		want;
+	} tests[] = {
+		{
+			.name	= "read scull0's pagesize",
+			.path	= "/sys/devices/scull0/pagesize",
+			.want	= 4096,
+		},
+		{},	/* sentry */
+	};
+	const struct test *t;
+	int fail = 0;
+
+	for (t = tests; t->name; t++) {
+		int err = test_attr_readi(t->path, t->want);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			continue;
+		}
+		ksft_inc_pass_cnt();
+	}
+	return fail;
+}
+
 static int test_scull_read(void)
 {
 	const struct test {
@@ -149,6 +211,7 @@ int main(void)
 	int fail;
 
 	fail = test_scull_open();
+	fail += test_scull_attr_readi();
 	fail += test_scull_read();
 	if (fail)
 		ksft_exit_fail();
