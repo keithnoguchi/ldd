@@ -9,8 +9,10 @@
 #include <linux/uaccess.h>
 
 /* Scull driver */
-static struct device_driver driver = {
-	.name	= "scull",
+static struct scull_driver {
+	struct device_driver	drv;
+} scull_driver = {
+	.drv.name	= "scull",
 };
 
 /* Scull devices */
@@ -216,14 +218,15 @@ int __init scull_register(void)
 	int i;
 
 	/* allocate scull device region */
-	err = alloc_chrdev_region(&devt, 0, ARRAY_SIZE(devices), driver.name);
+	err = alloc_chrdev_region(&devt, 0, ARRAY_SIZE(devices),
+				  scull_driver.drv.name);
 	if (err)
 		return err;
 
 	/* create devices */
 	for (d = devices, i = 0; d->dev.init_name; d++, i++) {
 		sema_init(&d->sem, 1);
-		d->dev.driver = &driver;
+		d->dev.driver = &scull_driver.drv;
 		d->dev.type = &device_type;
 		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i);
 		device_initialize(&d->dev);
