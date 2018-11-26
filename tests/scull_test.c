@@ -278,6 +278,16 @@ static int test_scull_attr_readi(void)
 			.want	= 4096,
 		},
 		{
+			.name	= "read scull0's quantum set size",
+			.path	= "/sys/devices/scull0/quantum_set",
+			.want	= 1024,
+		},
+		{
+			.name	= "read scull0's quantum size",
+			.path	= "/sys/devices/scull0/quantum",
+			.want	= 4096,
+		},
+		{
 			.name	= "read scull0's size",
 			.path	= "/sys/devices/scull0/size",
 			.want	= 0,

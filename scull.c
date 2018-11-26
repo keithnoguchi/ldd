@@ -10,8 +10,12 @@
 
 /* Scull driver */
 static struct scull_driver {
+	size_t			qset;
+	size_t			quantum;
 	struct device_driver	drv;
 } scull_driver = {
+	.qset		= 1024,
+	.quantum	= PAGE_SIZE,
 	.drv.name	= "scull",
 };
 
@@ -37,6 +41,22 @@ static ssize_t pagesize_show(struct device *dev, struct device_attribute *attr,
 	return snprintf(page, PAGE_SIZE, "%ld\n", PAGE_SIZE);
 }
 static DEVICE_ATTR_RO(pagesize);
+
+static ssize_t quantum_set_show(struct device *dev, struct device_attribute *attr,
+				char *page)
+{
+	struct scull_driver *drv = container_of(dev->driver, struct scull_driver, drv);
+	return snprintf(page, PAGE_SIZE, "%ld\n", drv->qset);
+}
+static DEVICE_ATTR_RO(quantum_set);
+
+static ssize_t quantum_show(struct device *dev, struct device_attribute *attr,
+			    char *page)
+{
+	struct scull_driver *drv = container_of(dev->driver, struct scull_driver, drv);
+	return snprintf(page, PAGE_SIZE, "%ld\n", drv->quantum);
+}
+static DEVICE_ATTR_RO(quantum);
 
 static ssize_t size_show(struct device *dev, struct device_attribute *attr,
 			 char *page)
@@ -72,6 +92,8 @@ static struct device_attribute dev_attr_buffer_pointer = {
 
 static struct attribute *scull_attrs[] = {
 	&dev_attr_pagesize.attr,
+	&dev_attr_quantum_set.attr,
+	&dev_attr_quantum.attr,
 	&dev_attr_size.attr,
 	NULL,
 };
