@@ -255,43 +255,43 @@ static int test_scull_writen(void)
 {
 	const struct test {
 		const char	*name;
-		const char	*path;
+		const char	*dev;
 		size_t		len;
 		int		count;
 	} tests[] = {
 		{
 			.name	= "write 0 byte on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 0,
 			.count	= 1,
 		},
 		{
 			.name	= "write 1 byte on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 1,
 			.count	= 1,
 		},
 		{
 			.name	= "write 1KiB on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 1024,
 			.count	= 1,
 		},
 		{
 			.name	= "write 4KiB on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 1,
 		},
 		{
 			.name	= "write 4097 bytes on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 4097,
 			.count	= 1,
 		},
 		{
 			.name	= "write 8KiB on scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 2,
 		},
@@ -301,12 +301,38 @@ static int test_scull_writen(void)
 	int fail = 0;
 
 	for (t = tests; t->name; t++) {
-		int err = test_writen(t->path, t->len, t->count);
+		char path[BUFSIZ];
+		int err;
+
+		err = sprintf(path, "/dev/%s", t->dev);
+		if (err == -1) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_writen(path, t->len, t->count);
 		if (err) {
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
 			fail++;
+			continue;
+		}
+		err = sprintf(path, "/sys/devices/%s/size", t->dev);
+		if (err == -1) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_attr_readi(path, t->len*t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
 			continue;
 		}
 		ksft_inc_pass_cnt();

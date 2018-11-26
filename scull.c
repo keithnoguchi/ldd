@@ -87,7 +87,14 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
+
 	printk(KERN_INFO "write(%s:%ld)\n", dev_name(&d->dev), len);
+	if (down_interruptible(&d->sem))
+		return -ERESTARTSYS;
+	if (*pos+len > d->size)
+		d->size = *pos+len;
+	up(&d->sem);
+	*pos += len;
 	return len;
 }
 
