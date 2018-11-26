@@ -106,7 +106,7 @@ static int scull_open(struct inode *i, struct file *f)
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	/* reset the file size when it's opened for write only */
-	if ((f->f_flags&O_ACCMODE) & O_WRONLY) {
+	if ((f->f_flags&O_ACCMODE) == O_WRONLY) {
 		kfree(d->data);
 		d->data = NULL;
 		d->bufsiz = 0;
