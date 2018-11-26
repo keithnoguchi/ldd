@@ -128,9 +128,14 @@ static int test_writen_and_readn(const char *path, size_t len, int nr)
 {
 	char *wbuf = NULL, *rbuf = NULL;
 	int wlen, rlen;
-	int ret = 0;
+	int ret;
 	int fd;
 	int i;
+
+	/* Reset the device by opening it write only */
+	ret = test_open(path, O_WRONLY);
+	if (ret)
+		return ret;
 
 	/* prepare the buffer */
 	wbuf = malloc(len*nr);
@@ -146,8 +151,8 @@ static int test_writen_and_readn(const char *path, size_t len, int nr)
 	}
 	memset(rbuf, 0xbb, len*nr);
 
-	/* First, open the file write only */
-	fd = open(path, O_WRONLY);
+	/* Open file read and write */
+	fd = open(path, O_RDWR);
 	if (fd == -1)
 		goto out;
 
@@ -166,12 +171,13 @@ static int test_writen_and_readn(const char *path, size_t len, int nr)
 			pos += ret;
 		}
 	}
-	close(fd);
 
-	/* then read it */
-	fd = open(path, O_RDWR);
-	if (fd == -1)
+	/* Read file from the beginning */
+	ret = lseek(fd, 0, SEEK_SET);
+	if (ret == -1) {
+		ret = errno;
 		goto out;
+	}
 
 	rlen = 0;
 	for (i = 0; i < nr; i++) {
@@ -213,7 +219,8 @@ out:
 		free(rbuf);
 	if (wbuf)
 		free(wbuf);
-	close(fd);
+	if (fd != -1)
+		close(fd);
 	return ret;
 }
 

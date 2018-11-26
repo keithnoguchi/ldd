@@ -116,6 +116,29 @@ static int scull_open(struct inode *i, struct file *f)
 	return 0;
 }
 
+static loff_t scull_llseek(struct file *f, loff_t offset, int whence)
+{
+	struct scull_device *d = f->private_data;
+	loff_t pos;
+
+	if (down_interruptible(&d->sem))
+		return -ERESTARTSYS;
+	pos = f->f_pos;
+	switch (whence) {
+	case SEEK_SET:
+		pos = offset;
+		break;
+	case SEEK_CUR:
+		pos = f->f_pos + offset;
+	case SEEK_END:
+		pos = d->size + offset;
+		break;
+	}
+	f->f_pos = pos;
+	up(&d->sem);
+	return pos;
+}
+
 static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
@@ -178,6 +201,7 @@ static int scull_release(struct inode *i, struct file *f)
 
 static const struct file_operations scull_fops = {
 	.open		= scull_open,
+	.llseek		= scull_llseek,
 	.read		= scull_read,
 	.write		= scull_write,
 	.release	= scull_release,
