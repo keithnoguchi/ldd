@@ -33,7 +33,7 @@ static ssize_t pagesize_show(struct device *dev, struct device_attribute *attr,
 {
 	return snprintf(page, PAGE_SIZE, "%ld\n", PAGE_SIZE);
 }
-DEVICE_ATTR_RO(pagesize);
+static DEVICE_ATTR_RO(pagesize);
 
 static ssize_t size_show(struct device *dev, struct device_attribute *attr,
 			 char *page)
@@ -41,23 +41,54 @@ static ssize_t size_show(struct device *dev, struct device_attribute *attr,
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
 	return snprintf(page, PAGE_SIZE, "%ld\n", d->size);
 }
-DEVICE_ATTR_RO(size);
+static DEVICE_ATTR_RO(size);
 
-static ssize_t bufsize_show(struct device *dev, struct device_attribute *attr,
-			    char *page)
+static ssize_t buffer_size_show(struct device *dev, struct device_attribute *attr,
+				char *page)
 {
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
 	return snprintf(page, PAGE_SIZE, "%ld\n", d->bufsiz);
 }
-DEVICE_ATTR_RO(bufsize);
+static struct device_attribute dev_attr_buffer_size = {
+	.attr.name	= "size",
+	.attr.mode	= 0444,
+	.show		= buffer_size_show,
+};
+
+static ssize_t buffer_pointer_show(struct device *dev, struct device_attribute *attr,
+			   char *page)
+{
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(page, PAGE_SIZE, "%p\n", d->data);
+}
+static struct device_attribute dev_attr_buffer_pointer = {
+	.attr.name	= "pointer",
+	.attr.mode	= 0444,
+	.show		= buffer_pointer_show,
+};
 
 static struct attribute *scull_attrs[] = {
 	&dev_attr_pagesize.attr,
 	&dev_attr_size.attr,
-	&dev_attr_bufsize.attr,
 	NULL,
 };
-ATTRIBUTE_GROUPS(scull);
+static struct attribute *scull_buffer_attrs[] = {
+	&dev_attr_buffer_size.attr,
+	&dev_attr_buffer_pointer.attr,
+	NULL,
+};
+static const struct attribute_group scull_group = {
+	.attrs = scull_attrs,
+};
+static const struct attribute_group scull_buffer_group = {
+	.name	= "buffer",
+	.attrs	= scull_buffer_attrs,
+};
+static const struct attribute_group *scull_groups[] = {
+	&scull_group,
+	&scull_buffer_group,
+	NULL,
+};
 
 /* Scull device type to carry the device attributes. */
 static struct device_type device_type = {

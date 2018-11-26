@@ -178,8 +178,8 @@ static int test_scull_attr_readi(void)
 			.want	= 0,
 		},
 		{
-			.name	= "read scull0's bufsize",
-			.path	= "/sys/devices/scull0/bufsize",
+			.name	= "read scull0's buffer size",
+			.path	= "/sys/devices/scull0/buffer/size",
 			.want	= 0,
 		},
 		{},	/* sentry */
@@ -342,7 +342,7 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = sprintf(path, "/sys/devices/%s/bufsize", t->dev);
+		err = sprintf(path, "/sys/devices/%s/buffer/size", t->dev);
 		if (err == -1) {
 			errno = err;
 			perror(t->name);
