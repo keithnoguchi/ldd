@@ -84,6 +84,13 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 	return len;
 }
 
+static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
+{
+	struct scull_device *d = f->private_data;
+	printk(KERN_INFO "write(%s:%ld)\n", dev_name(&d->dev), len);
+	return len;
+}
+
 static int scull_release(struct inode *i, struct file *f)
 {
 	struct scull_device *d = f->private_data;
@@ -94,6 +101,7 @@ static int scull_release(struct inode *i, struct file *f)
 static const struct file_operations scull_fops = {
 	.open		= scull_open,
 	.read		= scull_read,
+	.write		= scull_write,
 	.release	= scull_release,
 };
 

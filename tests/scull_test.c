@@ -84,6 +84,41 @@ out:
 	return err;
 }
 
+static int test_writen(const char *path, size_t len, int nr)
+{
+	char *buf = NULL;
+	int err;
+	int fd;
+	int i;
+
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		return errno;
+
+	buf = malloc(len);
+	if (buf == NULL) {
+		err = errno;
+		goto out;
+	}
+	for (i = 0; i < nr; i++) {
+		int pos = 0;
+		while (pos < len) {
+			int ret = write(fd, buf+pos, len-pos);
+			if (ret == -1) {
+				err = errno;
+				goto out;
+			}
+			pos += ret;
+		}
+	}
+	err = 0;
+out:
+	if (buf)
+		free(buf);
+	close(fd);
+	return err;
+}
+
 static int test_scull_open(void)
 {
 	const struct test {
@@ -165,7 +200,7 @@ static int test_scull_attr_readi(void)
 	return fail;
 }
 
-static int test_scull_read(void)
+static int test_scull_readn(void)
 {
 	const struct test {
 		const char	*name;
@@ -216,13 +251,77 @@ static int test_scull_read(void)
 	return fail;
 }
 
+static int test_scull_writen(void)
+{
+	const struct test {
+		const char	*name;
+		const char	*path;
+		size_t		len;
+		int		count;
+	} tests[] = {
+		{
+			.name	= "write 0 byte on scull0",
+			.path	= "/dev/scull0",
+			.len	= 0,
+			.count	= 1,
+		},
+		{
+			.name	= "write 1 byte on scull0",
+			.path	= "/dev/scull0",
+			.len	= 1,
+			.count	= 1,
+		},
+		{
+			.name	= "write 1KiB on scull0",
+			.path	= "/dev/scull0",
+			.len	= 1024,
+			.count	= 1,
+		},
+		{
+			.name	= "write 4KiB on scull0",
+			.path	= "/dev/scull0",
+			.len	= 4096,
+			.count	= 1,
+		},
+		{
+			.name	= "write 4097 bytes on scull0",
+			.path	= "/dev/scull0",
+			.len	= 4097,
+			.count	= 1,
+		},
+		{
+			.name	= "write 8KiB on scull0",
+			.path	= "/dev/scull0",
+			.len	= 4096,
+			.count	= 2,
+		},
+		{},	/* sentry */
+	};
+	const struct test *t;
+	int fail = 0;
+
+	for (t = tests; t->name; t++) {
+		int err = test_writen(t->path, t->len, t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		ksft_inc_pass_cnt();
+	}
+	return fail;
+}
+
 int main(void)
 {
 	int fail;
 
 	fail = test_scull_open();
 	fail += test_scull_attr_readi();
-	fail += test_scull_read();
+	fail += test_scull_readn();
+	fail += test_scull_writen();
 	if (fail)
 		ksft_exit_fail();
 	ksft_exit_pass();
