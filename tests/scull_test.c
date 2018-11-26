@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -6,11 +7,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <limits.h>
+#include <string.h>
 #include "kselftest.h"
 
-static int test_open(const char *path, mode_t mode)
+static int test_open(const char *path, int flags)
 {
-	int fd = open(path, mode);
+	int fd = open(path, flags);
 	if (fd == -1)
 		return errno;
 	close(fd);
@@ -73,6 +75,9 @@ static int test_readn(const char *path, size_t len, int n)
 				err = errno;
 				goto out;
 			}
+			/* treat the zero read as success */
+			if (ret == 0)
+				break;
 			pos += ret;
 		}
 	}
@@ -119,27 +124,105 @@ out:
 	return err;
 }
 
+static int test_writen_and_readn(const char *path, size_t len, int nr)
+{
+	char *wbuf = NULL, *rbuf = NULL;
+	int ret = 0;
+	int fd;
+	int i;
+
+	/* prepare the buffer */
+	wbuf = malloc(len*nr);
+	if (wbuf == NULL)
+		return errno;
+	memset(wbuf, 0xaa, len*nr);
+
+	rbuf = malloc(len*nr);
+	if (rbuf == NULL) {
+		ret = errno;
+		free(wbuf);
+		return ret;
+	}
+	memset(rbuf, 0xbb, len*nr);
+
+	/* opne write only to reset the device */
+	ret = test_open(path, O_WRONLY);
+	if (ret)
+		goto out;
+
+	/* now open the device read write */
+	fd = open(path, O_RDWR);
+	if (fd == -1)
+		return errno;
+
+	/* first write it. */
+	for (i = 0; i < nr; i++) {
+		int pos = 0;
+		while (pos < len) {
+			int ret = write(fd, wbuf+pos, len-pos);
+			if (ret == -1) {
+				ret = errno;
+				goto out;
+			}
+			pos += ret;
+		}
+	}
+
+	/* then read it */
+	for (i = 0; i < nr; i++) {
+		int pos = 0;
+		while (pos < len) {
+			ret = read(fd, rbuf+pos, len-pos);
+			if (ret == -1) {
+				ret = errno;
+				goto out;
+			}
+			if (ret == 0)
+				break;
+			pos += ret;
+		}
+	}
+	if (memcmp(rbuf, wbuf, len*nr)) {
+		for (i = 0; i < len*nr; i++)
+			if (rbuf[i] != wbuf[i]) {
+				fprintf(stderr, "rbuf[%d](0x%hhx) != wbuf[%d](0x%hhx)\n",
+					i, rbuf[i], i, wbuf[i]);
+				break;
+			}
+		ret = EINVAL;
+		goto out;
+	}
+	ret = 0;
+out:
+	if (rbuf)
+		free(rbuf);
+	if (wbuf)
+		free(wbuf);
+	close(fd);
+	return ret;
+}
+
 static int test_scull_open(void)
 {
 	const struct test {
 		const char	*name;
 		const char	*path;
-		mode_t		mode;
+		int		flags;
 	} tests[] = {
 		{
 			.name	= "scull0 read only open",
 			.path	= "/dev/scull0",
-			.mode	= O_RDONLY,
+			.flags	= O_RDONLY,
 		},
 		{
 			.name	= "scull0 write only open",
 			.path	= "/dev/scull0",
-			.mode	= O_WRONLY,
+			.flags	= O_WRONLY,
 		},
 		{
 			.name	= "scull0 read/write open",
 			.path	= "/dev/scull0",
-			.mode	= O_RDWR,
+			.flags	= O_RDWR,
 		},
 		{}, /* sentory */
 	};
@@ -147,7 +230,7 @@ static int test_scull_open(void)
 	int fail = 0;
 
 	for (t = tests; t->name; t++) {
-		int err = test_open(t->path, t->mode);
+		int err = test_open(t->path, t->flags);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -363,6 +446,85 @@ static int test_scull_writen(void)
 	return fail;
 }
 
+static int test_scull_writen_and_readn(void)
+{
+	const struct test {
+		const char	*name;
+		const char	*dev;
+		size_t		len;
+		int		count;
+	} tests[] = {
+		{
+			.name	= "write and read 0 bytes on scull0",
+			.dev	= "scull0",
+			.len	= 0,
+			.count	= 1,
+		},
+		{
+			.name	= "write and read 1 bytes on scull0",
+			.dev	= "scull0",
+			.len	= 1,
+			.count	= 1,
+		},
+		{
+			.name	= "write and read 1KiB on scull0",
+			.dev	= "scull0",
+			.len	= 1024,
+			.count	= 1,
+		},
+		{
+			.name	= "write and read 4KiB on scull0",
+			.dev	= "scull0",
+			.len	= 4096,
+			.count	= 1,
+		},
+		{
+			.name	= "write and read 4KiB on scull0",
+			.dev	= "scull0",
+			.len	= 1024,
+			.count	= 4,
+		},
+		{
+			.name	= "write and read 4097 bytes on scull0",
+			.dev	= "scull0",
+			.len	= 4097,
+			.count	= 1,
+		},
+		{
+			.name	= "write and read 8KiB on scull0",
+			.dev	= "scull0",
+			.len	= 4096,
+			.count	= 2,
+		},
+		{},	/* sentry */
+	};
+	const struct test *t;
+	int fail = 0;
+
+	for (t = tests; t->name; t++) {
+		char path[BUFSIZ];
+		int err;
+
+		err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+		if (err == -1) {
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_writen_and_readn(path, t->len, t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		ksft_inc_pass_cnt();
+	}
+	return fail;
+}
+
 int main(void)
 {
 	int fail;
@@ -371,6 +533,7 @@ int main(void)
 	fail += test_scull_attr_readi();
 	fail += test_scull_readn();
 	fail += test_scull_writen();
+	fail += test_scull_writen_and_readn();
 	if (fail)
 		ksft_exit_fail();
 	ksft_exit_pass();

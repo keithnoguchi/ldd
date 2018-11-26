@@ -101,7 +101,6 @@ static int scull_open(struct inode *i, struct file *f)
 {
 	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
 
-	printk(KERN_INFO "open(%s)\n", dev_name(&d->dev));
 	f->private_data = d;
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
@@ -123,6 +122,9 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 	printk(KERN_INFO "read(%s:%ld)\n", dev_name(&d->dev), len);
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
+	if (*pos+len > d->size)
+		len = d->size-*pos;
+	*pos += len;
 	up(&d->sem);
 	return len;
 }
@@ -156,8 +158,6 @@ out:
 
 static int scull_release(struct inode *i, struct file *f)
 {
-	struct scull_device *d = f->private_data;
-	printk(KERN_INFO "release(%s)\n", dev_name(&d->dev));
 	return 0;
 }
 
