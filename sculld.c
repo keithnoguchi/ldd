@@ -41,6 +41,36 @@ static struct sculld_device {
 	{},	/* sentry */
 };
 
+/* Sculld device attributes */
+static ssize_t size_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
+	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
+}
+static DEVICE_ATTR_RO(size);
+
+static ssize_t bufsiz_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
+	return snprintf(buf, PAGE_SIZE, "%ld\n", d->bufsiz);
+}
+static DEVICE_ATTR_RO(bufsiz);
+
+/* Sculld attribute groups */
+static struct attribute *sculld_attrs[] = {
+	&dev_attr_size.attr,
+	&dev_attr_bufsiz.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(sculld);
+
+/* Scull device type */
+static struct device_type sculld_device_type = {
+	.name	= "sculld",
+	.groups	= sculld_groups,
+};
+
+
 static int sculld_open(struct inode *i, struct file *f)
 {
 	struct sculld_device *d = container_of(i->i_cdev, struct sculld_device, cdev);
@@ -99,41 +129,6 @@ static const struct file_operations sculld_fops = {
 	.read		= sculld_read,
 	.write		= sculld_write,
 	.release	= sculld_release,
-};
-
-/* Scull attributes */
-static ssize_t size_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
-	return snprintf(buf, PAGE_SIZE, "%ld\n", d->size);
-}
-static const DEVICE_ATTR_RO(size);
-
-static ssize_t bufsiz_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct sculld_device *d = container_of(dev, struct sculld_device, dev);
-	return snprintf(buf, PAGE_SIZE, "%ld\n", d->bufsiz);
-}
-static const DEVICE_ATTR_RO(bufsiz);
-
-/* Scull attribute groups */
-static const struct attribute *sculld_attrs[] = {
-	&dev_attr_size.attr,
-	&dev_attr_bufsiz.attr,
-	NULL,
-};
-static const struct attribute_group sculld_group = {
-	.attrs = (struct attribute **)sculld_attrs,
-};
-static const struct attribute_group *sculld_groups[] = {
-	&sculld_group,
-	NULL,
-};
-
-/* Scull device type */
-static struct device_type sculld_device_type = {
-	.name	= "sculld",
-	.groups	= sculld_groups,
 };
 
 int __init sculld_register(void)
