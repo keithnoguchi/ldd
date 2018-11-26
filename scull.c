@@ -6,6 +6,7 @@
 #include <linux/cdev.h>
 #include <linux/semaphore.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 /* Scull driver */
 static struct device_driver driver = {
@@ -118,37 +119,51 @@ static int scull_open(struct inode *i, struct file *f)
 static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
+	ssize_t ret;
 
-	printk(KERN_INFO "read(%s:%ld)\n", dev_name(&d->dev), len);
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	if (*pos+len > d->size)
 		len = d->size-*pos;
+	ret = 0;
+	if (len == 0)
+		goto out;
+	ret = copy_to_user(buf, d->data+*pos, len);
+	if (unlikely(ret))
+		len -= ret;
 	*pos += len;
+	ret = len;
+out:
 	up(&d->sem);
-	return len;
+	return ret;
 }
 
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
-	ssize_t ret = 0;
+	ssize_t ret;
 
-	printk(KERN_INFO "write(%s:%ld)\n", dev_name(&d->dev), len);
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	if (*pos+len > d->size) {
 		/* as simple as this for now */
-		if (d->data)
-			kfree(d->data);
+		void *prev = d->data;
 		d->data = kmalloc(*pos+len, GFP_KERNEL);
 		if (d->data == NULL) {
 			ret = -ENOMEM;
+			kfree(prev);
 			goto out;
 		}
+		memcpy(d->data, prev, d->bufsiz);
 		d->bufsiz = *pos+len;
 		d->size = d->bufsiz;
 	}
+	ret = 0;
+	if (len == 0)
+		goto out;
+	ret = copy_from_user(d->data+*pos, buf, len);
+	if (unlikely(ret))
+		len -= ret;
 	ret = len;
 	*pos += len;
 out:

@@ -127,6 +127,7 @@ out:
 static int test_writen_and_readn(const char *path, size_t len, int nr)
 {
 	char *wbuf = NULL, *rbuf = NULL;
+	int wlen, rlen;
 	int ret = 0;
 	int fd;
 	int i;
@@ -145,42 +146,56 @@ static int test_writen_and_readn(const char *path, size_t len, int nr)
 	}
 	memset(rbuf, 0xbb, len*nr);
 
-	/* opne write only to reset the device */
-	ret = test_open(path, O_WRONLY);
-	if (ret)
+	/* First, open the file write only */
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
 		goto out;
 
-	/* now open the device read write */
-	fd = open(path, O_RDWR);
-	if (fd == -1)
-		return errno;
-
 	/* first write it. */
+	wlen = 0;
 	for (i = 0; i < nr; i++) {
+		char *buf = &wbuf[len*i];
 		int pos = 0;
 		while (pos < len) {
-			int ret = write(fd, wbuf+pos, len-pos);
+			int ret = write(fd, buf+pos, len-pos);
 			if (ret == -1) {
 				ret = errno;
 				goto out;
 			}
+			wlen += ret;
 			pos += ret;
 		}
 	}
+	close(fd);
 
 	/* then read it */
+	fd = open(path, O_RDWR);
+	if (fd == -1)
+		goto out;
+
+	rlen = 0;
 	for (i = 0; i < nr; i++) {
+		char *buf = &rbuf[len*i];
 		int pos = 0;
 		while (pos < len) {
-			ret = read(fd, rbuf+pos, len-pos);
+			ret = read(fd, buf+pos, len-pos);
 			if (ret == -1) {
 				ret = errno;
 				goto out;
 			}
 			if (ret == 0)
 				break;
+			rlen += ret;
 			pos += ret;
 		}
+	}
+	if (rlen != wlen) {
+		ret = EINVAL;
+		goto out;
+	}
+	if (rlen != len*nr) {
+		ret = EINVAL;
+		goto out;
 	}
 	if (memcmp(rbuf, wbuf, len*nr)) {
 		for (i = 0; i < len*nr; i++)
