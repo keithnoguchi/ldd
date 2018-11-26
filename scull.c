@@ -14,6 +14,8 @@ static struct device_driver driver = {
 /* Scull devices */
 static struct scull_device {
 	struct semaphore	sem;
+	size_t			size;
+	size_t			bufsiz;
 	struct device		dev;
 	struct cdev		cdev;
 } devices[] = {
@@ -31,18 +33,32 @@ static ssize_t pagesize_show(struct device *dev, struct device_attribute *attr,
 }
 DEVICE_ATTR_RO(pagesize);
 
+static ssize_t size_show(struct device *dev, struct device_attribute *attr,
+			 char *page)
+{
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(page, PAGE_SIZE, "%ld\n", d->size);
+}
+DEVICE_ATTR_RO(size);
+
+static ssize_t bufsize_show(struct device *dev, struct device_attribute *attr,
+			    char *page)
+{
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(page, PAGE_SIZE, "%ld\n", d->bufsiz);
+}
+DEVICE_ATTR_RO(bufsize);
+
 static const struct attribute *scull_attrs[] = {
 	&dev_attr_pagesize.attr,
+	&dev_attr_size.attr,
+	&dev_attr_bufsize.attr,
 	NULL,
 };
 static const struct attribute_group scull_group = {
 	.attrs	= (struct attribute **)scull_attrs,
 };
-static const struct attribute_group *scull_groups[] = {
-	&scull_group,
-	NULL,
-};
-
+static const struct attribute_group *scull_groups[] = { &scull_group, NULL };
 static const struct device_type device_type = {
 	.name	= "scull",
 	.groups	= (const struct attribute_group **)&scull_groups,

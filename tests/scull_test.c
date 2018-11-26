@@ -137,6 +137,16 @@ static int test_scull_attr_readi(void)
 			.path	= "/sys/devices/scull0/pagesize",
 			.want	= 4096,
 		},
+		{
+			.name	= "read scull0's size",
+			.path	= "/sys/devices/scull0/size",
+			.want	= 0,
+		},
+		{
+			.name	= "read scull0's bufsize",
+			.path	= "/sys/devices/scull0/bufsize",
+			.want	= 0,
+		},
 		{},	/* sentry */
 	};
 	const struct test *t;
