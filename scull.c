@@ -4,6 +4,7 @@
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/semaphore.h>
 
 /* Scull driver */
 static struct device_driver driver = {
@@ -12,8 +13,9 @@ static struct device_driver driver = {
 
 /* Scull devices */
 static struct scull_device {
-	struct device	dev;
-	struct cdev	cdev;
+	struct semaphore	sem;
+	struct device		dev;
+	struct cdev		cdev;
 } devices[] = {
 	{
 		.dev.init_name	= "scull0",
@@ -24,19 +26,27 @@ static struct scull_device {
 static int scull_open(struct inode *i, struct file *f)
 {
 	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
-	printk("open(%s)\n", dev_name(&d->dev));
+
+	printk(KERN_INFO "open(%s)\n", dev_name(&d->dev));
+	f->private_data = d;
 	return 0;
 }
 
 static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
-	return 0;
+	struct scull_device *d = f->private_data;
+
+	printk(KERN_INFO "read(%s:%ld)\n", dev_name(&d->dev), len);
+	if (down_interruptible(&d->sem))
+		return -ERESTARTSYS;
+	up(&d->sem);
+	return len;
 }
 
 static int scull_release(struct inode *i, struct file *f)
 {
-	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
-	printk("release(%s)\n", dev_name(&d->dev));
+	struct scull_device *d = f->private_data;
+	printk(KERN_INFO "release(%s)\n", dev_name(&d->dev));
 	return 0;
 }
 
@@ -59,10 +69,10 @@ int scull_register(void)
 		return err;
 
 	/* create devices */
-	i = 0;
-	for (d = devices; d->dev.init_name; d++) {
+	for (d = devices, i = 0; d->dev.init_name; d++, i++) {
+		sema_init(&d->sem, 1);
 		d->dev.driver = &driver;
-		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i++);
+		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i);
 		device_initialize(&d->dev);
 		cdev_init(&d->cdev, &scull_fops);
 		err = cdev_device_add(&d->cdev, &d->dev);

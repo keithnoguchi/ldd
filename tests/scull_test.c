@@ -44,7 +44,7 @@ static int test_readn(const char *path, size_t len, int n)
 			pos += ret;
 		}
 	}
-	return 0;
+	err = 0;
 out:
 	if (buf)
 		free(buf);
@@ -106,6 +106,24 @@ static int test_scull_read(void)
 			.path	= "/dev/scull0",
 			.len	= 0,
 			.count	= 0,
+		},
+		{
+			.name	= "read 1 byte from scull0",
+			.path	= "/dev/scull0",
+			.len	= 1,
+			.count	= 1,
+		},
+		{
+			.name	= "read 4096 bytes from scull0",
+			.path	= "/dev/scull0",
+			.len	= 4096,
+			.count	= 1,
+		},
+		{
+			.name	= "read 16KiB(4KiB x 4) from scull0",
+			.path	= "/dev/scull0",
+			.len	= 4096,
+			.count	= 4,
 		},
 		{}, /* sentry */
 	};
