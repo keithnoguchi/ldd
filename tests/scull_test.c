@@ -342,6 +342,22 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
+		err = sprintf(path, "/sys/devices/%s/bufsize", t->dev);
+		if (err == -1) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_attr_readi(path, t->len*t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
 		ksft_inc_pass_cnt();
 	}
 	return fail;

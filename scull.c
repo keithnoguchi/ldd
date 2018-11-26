@@ -5,6 +5,7 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/semaphore.h>
+#include <linux/slab.h>
 
 /* Scull driver */
 static struct device_driver driver = {
@@ -16,6 +17,7 @@ static struct scull_device {
 	struct semaphore	sem;
 	size_t			size;
 	size_t			bufsiz;
+	void			*data;
 	struct device		dev;
 	struct cdev		cdev;
 } devices[] = {
@@ -73,8 +75,12 @@ static int scull_open(struct inode *i, struct file *f)
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	/* reset the file size when it's opened for write only */
-	if ((f->f_flags&O_ACCMODE) & O_WRONLY)
+	if ((f->f_flags&O_ACCMODE) & O_WRONLY) {
+		kfree(d->data);
+		d->data = NULL;
+		d->bufsiz = 0;
 		d->size = 0;
+	}
 	up(&d->sem);
 	return 0;
 }
@@ -93,15 +99,28 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
+	ssize_t ret = 0;
 
 	printk(KERN_INFO "write(%s:%ld)\n", dev_name(&d->dev), len);
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
-	if (*pos+len > d->size)
-		d->size = *pos+len;
-	up(&d->sem);
+	if (*pos+len > d->size) {
+		/* as simple as this for now */
+		if (d->data)
+			kfree(d->data);
+		d->data = kmalloc(*pos+len, GFP_KERNEL);
+		if (d->data == NULL) {
+			ret = -ENOMEM;
+			goto out;
+		}
+		d->bufsiz = *pos+len;
+		d->size = d->bufsiz;
+	}
+	ret = len;
 	*pos += len;
-	return len;
+out:
+	up(&d->sem);
+	return ret;
 }
 
 static int scull_release(struct inode *i, struct file *f)
@@ -156,7 +175,9 @@ out:
 void scull_unregister(void)
 {
 	struct scull_device *d;
-	for (d = devices; dev_name(&d->dev); d++)
+	for (d = devices; dev_name(&d->dev); d++) {
 		cdev_device_del(&d->cdev, &d->dev);
+		kfree(d->data);
+	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 }
