@@ -98,24 +98,6 @@ static struct device_type device_type = {
 };
 
 /* Scull device file operations */
-static int scull_open(struct inode *i, struct file *f)
-{
-	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
-
-	f->private_data = d;
-	if (down_interruptible(&d->sem))
-		return -ERESTARTSYS;
-	/* reset the file size when it's opened for write only */
-	if ((f->f_flags&O_ACCMODE) == O_WRONLY) {
-		kfree(d->data);
-		d->data = NULL;
-		d->bufsiz = 0;
-		d->size = 0;
-	}
-	up(&d->sem);
-	return 0;
-}
-
 static loff_t scull_llseek(struct file *f, loff_t offset, int whence)
 {
 	struct scull_device *d = f->private_data;
@@ -194,16 +176,34 @@ out:
 	return ret;
 }
 
+static int scull_open(struct inode *i, struct file *f)
+{
+	struct scull_device *d = container_of(i->i_cdev, struct scull_device, cdev);
+
+	f->private_data = d;
+	if (down_interruptible(&d->sem))
+		return -ERESTARTSYS;
+	/* reset the file size when it's opened for write only */
+	if ((f->f_flags&O_ACCMODE) == O_WRONLY) {
+		kfree(d->data);
+		d->data = NULL;
+		d->bufsiz = 0;
+		d->size = 0;
+	}
+	up(&d->sem);
+	return 0;
+}
+
 static int scull_release(struct inode *i, struct file *f)
 {
 	return 0;
 }
 
 static const struct file_operations scull_fops = {
-	.open		= scull_open,
 	.llseek		= scull_llseek,
 	.read		= scull_read,
 	.write		= scull_write,
+	.open		= scull_open,
 	.release	= scull_release,
 };
 
