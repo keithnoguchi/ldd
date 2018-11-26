@@ -136,7 +136,7 @@ static struct device_type sculld_device_type = {
 	.groups	= sculld_groups,
 };
 
-int sculld_register(void)
+int __init sculld_register(void)
 {
 	struct sculld_device *dev, *dev_err = NULL;
 	dev_t devt;

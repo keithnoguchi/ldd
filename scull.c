@@ -83,7 +83,7 @@ static const struct file_operations scull_fops = {
 };
 
 /* Scull registration */
-int scull_register(void)
+int __init scull_register(void)
 {
 	struct scull_device *d, *d_err = NULL;
 	dev_t devt;

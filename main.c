@@ -34,7 +34,7 @@ struct bus_type ldd_bus_type = {
 	.match	= ldd_bus_match,
 };
 
-static int ldd_init(void)
+static int __init ldd_init(void)
 {
 	int err;
 
@@ -58,7 +58,7 @@ error:
 }
 module_init(ldd_init);
 
-static void ldd_exit(void)
+static void __exit ldd_exit(void)
 {
 	sculld_unregister();
 	scull_unregister();

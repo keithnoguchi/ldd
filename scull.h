@@ -2,7 +2,7 @@
 #ifndef _DRIVER_LDD_SCULL_H
 #define _DRIVER_LDD_SCULL_H
 
-int scull_register(void);
+int __init scull_register(void);
 void scull_unregister(void);
 
 #endif /* _DRIVER_LDD_SCULL_H */
