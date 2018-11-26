@@ -84,14 +84,14 @@ out:
 	return err;
 }
 
-static int test_writen(const char *path, size_t len, int nr)
+static int test_writen(const char *path, int flags, size_t len, int nr)
 {
 	char *buf = NULL;
 	int err;
 	int fd;
 	int i;
 
-	fd = open(path, O_WRONLY);
+	fd = open(path, flags);
 	if (fd == -1)
 		return errno;
 
@@ -318,7 +318,7 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = test_writen(path, t->len, t->count);
+		err = test_writen(path, O_WRONLY, t->len, t->count);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -339,6 +339,7 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
+			fail++;
 			continue;
 		}
 		ksft_inc_pass_cnt();

@@ -72,8 +72,8 @@ static int scull_open(struct inode *i, struct file *f)
 	f->private_data = d;
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
-	/* reset the file size when it's open for write */
-	if ((f->f_mode&O_ACCMODE) & O_WRONLY)
+	/* reset the file size when it's opened for write only */
+	if ((f->f_flags&O_ACCMODE) & O_WRONLY)
 		d->size = 0;
 	up(&d->sem);
 	return 0;
