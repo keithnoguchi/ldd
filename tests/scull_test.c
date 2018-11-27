@@ -63,9 +63,10 @@ static int test_attr_readl(const char *path, long want)
 	return 0;
 }
 
-static int test_readn(const char *path, size_t len, int n)
+static ssize_t test_readn(const char *path, size_t len, int n, size_t *got)
 {
 	char *buf = NULL;
+	size_t total;
 	int err;
 	int fd;
 	int i;
@@ -80,6 +81,7 @@ static int test_readn(const char *path, size_t len, int n)
 		goto out;
 	}
 
+	total = 0;
 	for (i = 0; i < n; i++) {
 		int pos = 0;
 		while (pos < len) {
@@ -93,7 +95,9 @@ static int test_readn(const char *path, size_t len, int n)
 				break;
 			pos += ret;
 		}
+		total += pos;
 	}
+	*got = total;
 	err = 0;
 out:
 	if (buf)
@@ -332,41 +336,65 @@ static int test_scull_readn(void)
 {
 	const struct test {
 		const char	*name;
-		const char	*path;
+		const char	*dev;
 		size_t		len;
 		int		count;
 	} tests[] = {
 		{
 			.name	= "read 0 byte from scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 0,
 			.count	= 0,
 		},
 		{
 			.name	= "read 1 byte from scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 1,
 			.count	= 1,
 		},
 		{
 			.name	= "read 4096 bytes from scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 1,
 		},
 		{
 			.name	= "read 16KiB(4KiB x 4) from scull0",
-			.path	= "/dev/scull0",
+			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 4,
 		},
 		{}, /* sentry */
 	};
 	const struct test *t;
+	char path[BUFSIZ];
 	int fail = 0;
+	size_t total;
 
 	for (t = tests; t->name; t++) {
-		int err = test_readn(t->path, t->len, t->count);
+		int err = sprintf(path, "/dev/%s", t->dev);
+		if (err == -1) {
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_readn(path, t->len, t->count, &total);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = sprintf(path, "/sys/devices/%s/size", t->dev);
+		if (err == -1) {
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_attr_readl(path, total);
 		if (err) {
 			errno = err;
 			perror(t->name);
