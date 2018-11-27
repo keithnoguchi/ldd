@@ -24,6 +24,8 @@ static struct scull_device {
 	struct semaphore	sem;
 	size_t			size;
 	size_t			bufsiz;
+	size_t			qset;
+	size_t			quantum;
 	struct scull_qset	*data;
 	struct device		dev;
 	struct cdev		cdev;
@@ -40,17 +42,16 @@ struct scull_qset {
 	void			**data;
 };
 
-/* trim all the quantum data.  The device should be locked. */
+/* scull_trim trims the data.  The device should be locked by the caller. */
 static void scull_trim(struct scull_device *d)
 {
-	struct scull_driver *drv = container_of(d->dev.driver, struct scull_driver, drv);
 	struct scull_qset *qset, *next;
 	int i;
 
 	for (qset = d->data; qset; qset = next) {
 		next = qset->next;
 		if (qset->data) {
-			for (i = 0; i < drv->qset; i++)
+			for (i = 0; i < d->qset; i++)
 				kfree(qset->data[i]);
 			kfree(qset->data);
 		}
@@ -61,15 +62,17 @@ static void scull_trim(struct scull_device *d)
 	d->size = 0;
 }
 
-/* get the quantum for read operation.  The device should be locked. */
-static void *scull_quantum(struct scull_device *d, loff_t pos)
+/* scull_lookup looks up the quantum for the read operation.
+ * The device should be locked by the caller. */
+static void *scull_lookup(struct scull_device *d, loff_t pos)
 {
 	/* TBD */
 	return NULL;
 }
 
-/* get the quantum for write operation.  The device should be locked. */
-static void *scull_get_quantum(struct scull_device *d, loff_t pos)
+/* scull_get gets the quantum for write operation.
+ * The device should be locked by the caller. */
+static void *scull_get(struct scull_device *d, loff_t pos)
 {
 	/* TBD */
 	return NULL;
@@ -86,16 +89,16 @@ static DEVICE_ATTR_RO(pagesize);
 static ssize_t quantum_set_show(struct device *dev, struct device_attribute *attr,
 				char *page)
 {
-	struct scull_driver *drv = container_of(dev->driver, struct scull_driver, drv);
-	return snprintf(page, PAGE_SIZE, "%ld\n", drv->qset);
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(page, PAGE_SIZE, "%ld\n", d->qset);
 }
 static DEVICE_ATTR_RO(quantum_set);
 
 static ssize_t quantum_show(struct device *dev, struct device_attribute *attr,
 			    char *page)
 {
-	struct scull_driver *drv = container_of(dev->driver, struct scull_driver, drv);
-	return snprintf(page, PAGE_SIZE, "%ld\n", drv->quantum);
+	struct scull_device *d = container_of(dev, struct scull_device, dev);
+	return snprintf(page, PAGE_SIZE, "%ld\n", d->quantum);
 }
 static DEVICE_ATTR_RO(quantum);
 
@@ -189,7 +192,6 @@ static loff_t scull_llseek(struct file *f, loff_t offset, int whence)
 static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
-	struct scull_driver *drv = container_of(d->dev.driver, struct scull_driver, drv);
 	void *qptr;
 	loff_t qpos;
 	ssize_t ret;
@@ -199,13 +201,13 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 	if (*pos+len > d->size)
 		len = d->size-*pos;
 	ret = -EINVAL;
-	qptr = scull_quantum(d, *pos);
+	qptr = scull_lookup(d, *pos);
 	if (qptr)
 		goto out;
 	/* support per quantum read only */
-	qpos = *pos%drv->quantum;
-	if (qpos+len > drv->quantum)
-		len = drv->quantum-qpos;
+	qpos = *pos%d->quantum;
+	if (qpos+len > d->quantum)
+		len = d->quantum-qpos;
 	ret = 0;
 	if (len == 0)
 		goto out;
@@ -222,7 +224,6 @@ out:
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
-	struct scull_driver *drv = container_of(d->dev.driver, struct scull_driver, drv);
 	void *qptr;
 	loff_t qpos;
 	ssize_t ret;
@@ -231,13 +232,13 @@ static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, l
 		return -ERESTARTSYS;
 	/* find the quantum */
 	ret = -ENOMEM;
-	qptr = scull_get_quantum(d, *pos);
+	qptr = scull_get(d, *pos);
 	if (qptr == NULL)
 		goto out;
 	/* support per quantum write only */
-	qpos = *pos%drv->quantum;
-	if (qpos+len > drv->quantum)
-		len = drv->quantum-qpos;
+	qpos = *pos%d->quantum;
+	if (qpos+len > d->quantum)
+		len = d->quantum-qpos;
 	ret = 0;
 	if (len == 0)
 		goto out;
@@ -297,6 +298,8 @@ int __init scull_register(void)
 	/* create devices */
 	for (d = devices, i = 0; d->dev.init_name; d++, i++) {
 		sema_init(&d->sem, 1);
+		d->qset = scull_driver.qset;
+		d->quantum = scull_driver.quantum;
 		d->dev.driver = &scull_driver.drv;
 		d->dev.type = &device_type;
 		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i);
