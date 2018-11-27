@@ -42,8 +42,8 @@ struct scull_qset {
 	void			**data;
 };
 
-/* scull_new allocates a new scull_qset. */
-static struct scull_qset *scull_new(struct scull_device *d)
+/* scull_alloc allocates a new scull_qset. */
+static struct scull_qset *scull_alloc(struct scull_device *d)
 {
 	struct scull_qset *qptr;
 	void **data;
@@ -63,7 +63,7 @@ static struct scull_qset *scull_new(struct scull_device *d)
 	return qptr;
 }
 
-/* scull_trim trims the data.  The device should be locked by the caller. */
+/* scull_trim trims data.  The device should be locked by the caller. */
 static void scull_trim(struct scull_device *d)
 {
 	struct scull_qset *qset, *next;
@@ -123,12 +123,12 @@ static void *scull_get(struct scull_device *d, loff_t pos)
 	spos = pos/ssize;
 	for (i = 0; i < spos; i++) {
 		if (*qptr == NULL)
-			if ((*qptr = scull_new(d)) == NULL)
+			if ((*qptr = scull_alloc(d)) == NULL)
 				return NULL;
 		qptr = &(*qptr)->next;
 	}
 	if (*qptr == NULL)
-		if ((*qptr = scull_new(d)) == NULL)
+		if ((*qptr = scull_alloc(d)) == NULL)
 			return NULL;
 
 	/* Lookup the quantum */
