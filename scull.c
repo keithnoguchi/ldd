@@ -256,8 +256,10 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
-	if (*pos+len > d->size)
-		len = d->size-*pos;
+	/* out of baund read */
+	ret = 0;
+	if (*pos >= d->size)
+		goto out;
 	ret = -EINVAL;
 	dptr = scull_lookup(d, *pos);
 	if (dptr == NULL)
