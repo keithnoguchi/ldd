@@ -63,7 +63,8 @@ static int test_attr_readl(const char *path, long want)
 	return 0;
 }
 
-static ssize_t test_readn(const char *path, size_t len, int n, size_t *got)
+static ssize_t test_readn(const char *path, size_t len, int n, off_t offset,
+			  size_t *got)
 {
 	char *buf = NULL;
 	size_t total;
@@ -80,7 +81,11 @@ static ssize_t test_readn(const char *path, size_t len, int n, size_t *got)
 		err = errno;
 		goto out;
 	}
-
+	if (offset)
+		if (lseek(fd, offset, SEEK_SET) == -1) {
+			err = errno;
+			goto out;
+		}
 	total = 0;
 	for (i = 0; i < n; i++) {
 		int pos = 0;
@@ -106,14 +111,14 @@ out:
 	return err;
 }
 
-static int test_writen(const char *path, int flags, size_t len, int nr)
+static int test_writen(const char *path, size_t len, int nr, off_t offset)
 {
 	char *buf = NULL;
 	int err;
 	int fd;
 	int i;
 
-	fd = open(path, flags);
+	fd = open(path, O_WRONLY);
 	if (fd == -1)
 		return errno;
 
@@ -122,6 +127,11 @@ static int test_writen(const char *path, int flags, size_t len, int nr)
 		err = errno;
 		goto out;
 	}
+	if (offset)
+		if (lseek(fd, offset, SEEK_SET) == -1) {
+			err = errno;
+			goto out;
+		}
 	for (i = 0; i < nr; i++) {
 		int pos = 0;
 		while (pos < len) {
@@ -339,30 +349,42 @@ static int test_scull_readn(void)
 		const char	*dev;
 		size_t		len;
 		int		count;
+		off_t		offset;
 	} tests[] = {
 		{
 			.name	= "read 0 byte from scull0",
 			.dev	= "scull0",
 			.len	= 0,
 			.count	= 0,
+			.offset	= 0,
 		},
 		{
 			.name	= "read 1 byte from scull0",
 			.dev	= "scull0",
 			.len	= 1,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "read 4096 bytes from scull0",
 			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "read 16KiB(4KiB x 4) from scull0",
 			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 4,
+			.offset	= 0,
+		},
+		{
+			.name	= "read 1 byte on 4KiB offset from scull0",
+			.dev	= "scull0",
+			.len	= 1,
+			.count	= 1,
+			.offset	= 4096,
 		},
 		{}, /* sentry */
 	};
@@ -379,7 +401,7 @@ static int test_scull_readn(void)
 			fail++;
 			continue;
 		}
-		err = test_readn(path, t->len, t->count, &total);
+		err = test_readn(path, t->len, t->count, t->offset, &total);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -414,48 +436,63 @@ static int test_scull_writen(void)
 		const char	*dev;
 		size_t		len;
 		int		count;
+		off_t		offset;
 	} tests[] = {
 		{
 			.name	= "write 0 byte on scull0",
 			.dev	= "scull0",
 			.len	= 0,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 1 byte on scull0",
 			.dev	= "scull0",
 			.len	= 1,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 1KiB on scull0",
 			.dev	= "scull0",
 			.len	= 1024,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 4KiB on scull0",
 			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 4097 bytes on scull0",
 			.dev	= "scull0",
 			.len	= 4097,
 			.count	= 1,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 8KiB on scull0",
 			.dev	= "scull0",
 			.len	= 4096,
 			.count	= 2,
+			.offset	= 0,
 		},
 		{
 			.name	= "write 0 byte on scull0",
 			.dev	= "scull0",
 			.len	= 0,
 			.count	= 1,
+			.offset	= 0,
+		},
+		{
+			.name	= "write 1 byte with 4KiB offset on scull0",
+			.dev	= "scull0",
+			.len	= 1,
+			.count	= 1,
+			.offset	= 4096,
 		},
 		{},	/* sentry */
 	};
@@ -475,7 +512,7 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = test_writen(path, O_WRONLY, t->len, t->count);
+		err = test_writen(path, t->len, t->count, t->offset);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -491,7 +528,7 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = test_attr_readl(path, t->len*t->count);
+		err = test_attr_readl(path, t->len*t->count+t->offset);
 		if (err) {
 			errno = err;
 			perror(t->name);

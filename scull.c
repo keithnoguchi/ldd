@@ -89,22 +89,23 @@ static void *scull_lookup(struct scull_device *d, loff_t pos)
 {
 	loff_t ssize = d->qset*d->quantum;
 	struct scull_qset *qptr;
-	loff_t spos, qpos;
+	size_t spos, sres, qpos;
 	int i;
 
 	/* find the quantum set */
 	qptr = d->data;
 	spos = pos/ssize;
 	for (i = 0; i < spos; i++) {
-		qptr = qptr->next;
 		if (qptr == NULL)
 			return NULL;
+		qptr = qptr->next;
 	}
 	if (qptr == NULL || qptr->data == NULL)
 		return NULL;
 
 	/* find the quantum */
-	qpos = (pos%ssize)/d->quantum;
+	sres = pos%ssize;
+	qpos = sres/d->quantum;
 	return qptr->data[qpos];
 }
 
@@ -114,22 +115,25 @@ static void *scull_get(struct scull_device *d, loff_t pos)
 {
 	loff_t ssize = d->qset*d->quantum;
 	struct scull_qset **qptr;
-	loff_t spos, qpos;
+	size_t spos, sres, qpos;
 	int i;
 
 	/* Lookup the qset */
+	qptr = &d->data;
 	spos = pos/ssize;
-	for (i = 0, qptr = &d->data; i < spos; i++, qptr = &(*qptr)->next) {
+	for (i = 0; i < spos; i++) {
 		if (*qptr == NULL)
 			if ((*qptr = scull_new(d)) == NULL)
 				return NULL;
+		qptr = &(*qptr)->next;
 	}
 	if (*qptr == NULL)
 		if ((*qptr = scull_new(d)) == NULL)
 			return NULL;
 
 	/* Lookup the quantum */
-	qpos = (pos%ssize)/d->quantum;
+	sres = pos%ssize;
+	qpos = sres/d->quantum;
 	if ((*qptr)->data[qpos] == NULL)
 		if (((*qptr)->data[qpos] = kmalloc(d->quantum, GFP_KERNEL)))
 			d->bufsiz += d->quantum;
