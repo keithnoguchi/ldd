@@ -362,6 +362,7 @@ int __init scull_register(void)
 	/* create devices */
 	for (d = devices, i = 0; d->dev.init_name; d++, i++) {
 		sema_init(&d->sem, 1);
+		d->size = d->bufsiz = 0;
 		d->qset = scull_driver.qset;
 		d->quantum = scull_driver.quantum;
 		d->dev.driver = &scull_driver.drv;
