@@ -22,8 +22,8 @@ static struct scull_driver {
 /* Scull devices */
 static struct scull_device {
 	struct semaphore	sem;
-	size_t			size;
-	size_t			bufsiz;
+	loff_t			size;
+	loff_t			bufsiz;
 	size_t			qset;
 	size_t			quantum;
 	struct scull_qset	*data;
@@ -168,7 +168,7 @@ static ssize_t size_show(struct device *dev, struct device_attribute *attr,
 			 char *page)
 {
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
-	return snprintf(page, PAGE_SIZE, "%ld\n", d->size);
+	return snprintf(page, PAGE_SIZE, "%lld\n", d->size);
 }
 static DEVICE_ATTR_RO(size);
 
@@ -176,7 +176,7 @@ static ssize_t buffer_size_show(struct device *dev, struct device_attribute *att
 				char *page)
 {
 	struct scull_device *d = container_of(dev, struct scull_device, dev);
-	return snprintf(page, PAGE_SIZE, "%ld\n", d->bufsiz);
+	return snprintf(page, PAGE_SIZE, "%lld\n", d->bufsiz);
 }
 static struct device_attribute dev_attr_buffer_size = {
 	.attr.name	= "size",
@@ -255,7 +255,7 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 {
 	struct scull_device *d = f->private_data;
 	void *dptr;
-	loff_t dpos;
+	size_t dpos;
 	ssize_t ret;
 
 	if (down_interruptible(&d->sem))
@@ -289,7 +289,7 @@ static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, l
 {
 	struct scull_device *d = f->private_data;
 	void *dptr;
-	loff_t dpos;
+	size_t dpos;
 	ssize_t ret;
 
 	if (down_interruptible(&d->sem))
