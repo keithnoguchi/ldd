@@ -63,7 +63,7 @@ static int test_attr_readl(const char *path, long want)
 	return 0;
 }
 
-static int test_readn(const char *path, size_t len, int n)
+static int test_readn(const char *path, size_t len, int n, int want_errno)
 {
 	char *buf = NULL;
 	int err;
@@ -85,12 +85,21 @@ static int test_readn(const char *path, size_t len, int n)
 		while (pos < len) {
 			int ret = read(fd, buf+pos, len-pos);
 			if (ret == -1) {
+				/* expected error */
+				if (errno == want_errno)
+					break;
 				err = errno;
 				goto out;
 			}
-			/* treat the zero read as success */
-			if (ret == 0)
-				break;
+			if (ret == 0) {
+				/* treat the zero read as success */
+				if (want_errno == 0)
+					break;
+				else {
+					err = EINVAL;
+					goto out;
+				}
+			}
 			pos += ret;
 		}
 	}
@@ -335,30 +344,35 @@ static int test_scull_readn(void)
 		const char	*path;
 		size_t		len;
 		int		count;
+		int		err;
 	} tests[] = {
 		{
 			.name	= "read 0 byte from scull0",
 			.path	= "/dev/scull0",
 			.len	= 0,
 			.count	= 0,
+			.err	= 0,
 		},
 		{
 			.name	= "read 1 byte from scull0",
 			.path	= "/dev/scull0",
 			.len	= 1,
 			.count	= 1,
+			.err	= EINVAL,
 		},
 		{
 			.name	= "read 4096 bytes from scull0",
 			.path	= "/dev/scull0",
 			.len	= 4096,
 			.count	= 1,
+			.err	= EINVAL,
 		},
 		{
 			.name	= "read 16KiB(4KiB x 4) from scull0",
 			.path	= "/dev/scull0",
 			.len	= 4096,
 			.count	= 4,
+			.err	= EINVAL,
 		},
 		{}, /* sentry */
 	};
@@ -366,7 +380,7 @@ static int test_scull_readn(void)
 	int fail = 0;
 
 	for (t = tests; t->name; t++) {
-		int err = test_readn(t->path, t->len, t->count);
+		int err = test_readn(t->path, t->len, t->count, t->err);
 		if (err) {
 			errno = err;
 			perror(t->name);

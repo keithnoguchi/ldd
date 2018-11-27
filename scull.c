@@ -258,16 +258,16 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 		return -ERESTARTSYS;
 	if (*pos+len > d->size)
 		len = d->size-*pos;
+	ret = -EINVAL;
+	dptr = scull_lookup(d, *pos);
+	if (dptr == NULL)
+		goto out;
 	/* support per quantum read only */
 	dpos = *pos%d->quantum;
 	if (dpos+len > d->quantum)
 		len = d->quantum-dpos;
 	ret = 0;
 	if (len == 0)
-		goto out;
-	ret = -EINVAL;
-	dptr = scull_lookup(d, *pos);
-	if (dptr == NULL)
 		goto out;
 	ret = copy_to_user(buf, dptr+dpos, len);
 	if (unlikely(ret))
