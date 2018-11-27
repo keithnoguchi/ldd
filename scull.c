@@ -42,6 +42,27 @@ struct scull_qset {
 	void			**data;
 };
 
+/* scull_new allocates a new scull_qset. */
+static struct scull_qset *scull_new(struct scull_device *d)
+{
+	struct scull_qset *qptr;
+	void **data;
+
+	qptr = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+	if (qptr == NULL)
+		return NULL;
+	data = kmalloc(sizeof(void *)*d->qset, GFP_KERNEL);
+	if (data == NULL) {
+		kfree(qptr);
+		return NULL;
+	}
+	memset(data, 0, sizeof(void *)*d->qset);
+	qptr->data = data;
+	qptr->next = NULL;
+
+	return qptr;
+}
+
 /* scull_trim trims the data.  The device should be locked by the caller. */
 static void scull_trim(struct scull_device *d)
 {
@@ -74,8 +95,28 @@ static void *scull_lookup(struct scull_device *d, loff_t pos)
  * The device should be locked by the caller. */
 static void *scull_get(struct scull_device *d, loff_t pos)
 {
-	/* TBD */
-	return NULL;
+	loff_t ssize = d->qset*d->quantum;
+	struct scull_qset **qptr;
+	loff_t spos, qpos;
+	int i;
+
+	/* Lookup the qset */
+	spos = pos/ssize;
+	for (i = 0, qptr = &d->data; i < spos; i++, qptr = &(*qptr)->next) {
+		if (*qptr == NULL)
+			if ((*qptr = scull_new(d)) == NULL)
+				return NULL;
+	}
+	if (*qptr == NULL)
+		if ((*qptr = scull_new(d)) == NULL)
+			return NULL;
+
+	/* Lookup the quantum */
+	qpos = (pos%ssize)/d->quantum;
+	if ((*qptr)->data[qpos] == NULL)
+		if (((*qptr)->data[qpos] = kmalloc(d->quantum, GFP_KERNEL)))
+			d->bufsiz += d->quantum;
+	return (*qptr)->data[qpos];
 }
 
 /* Scull device attributes */
@@ -224,25 +265,25 @@ out:
 static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
-	void *qptr;
-	loff_t qpos;
+	void *dptr;
+	loff_t dpos;
 	ssize_t ret;
 
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	/* find the quantum */
 	ret = -ENOMEM;
-	qptr = scull_get(d, *pos);
-	if (qptr == NULL)
+	dptr = scull_get(d, *pos);
+	if (dptr == NULL)
 		goto out;
 	/* support per quantum write only */
-	qpos = *pos%d->quantum;
-	if (qpos+len > d->quantum)
-		len = d->quantum-qpos;
+	dpos = *pos%d->quantum;
+	if (dpos+len > d->quantum)
+		len = d->quantum-dpos;
 	ret = 0;
 	if (len == 0)
 		goto out;
-	ret = copy_from_user(qptr+qpos, buf, len);
+	ret = copy_from_user(dptr+dpos, buf, len);
 	if (unlikely(ret))
 		len -= ret;
 	ret = len;

@@ -19,7 +19,7 @@ static int test_open(const char *path, int flags)
 	return 0;
 }
 
-static int test_attr_readi(const char *path, int want)
+static int test_attr_getl(const char *path, long *get)
 {
 	char buf[BUFSIZ];
 	int err = 0;
@@ -35,19 +35,32 @@ static int test_attr_readi(const char *path, int want)
 		err = errno;
 		goto out;
 	}
+
 	got = strtol(buf, NULL, 10);
 	if (got <= LONG_MIN || got >= LONG_MAX) {
-		err = errno;
-		goto out;
-	}
-	if (got != want) {
 		err = EINVAL;
 		goto out;
 	}
 	err = 0;
+	*get = got;
 out:
 	close(fd);
 	return err;
+}
+
+static int test_attr_readl(const char *path, long want)
+{
+	long got;
+	int err;
+
+	err = test_attr_getl(path, &got);
+	if (err)
+		return err;
+	if (got != want) {
+		fprintf(stderr, "got(%ld)!=want(%ld)\n", got, want);
+		return EINVAL;
+	}
+	return 0;
 }
 
 static int test_readn(const char *path, size_t len, int n)
@@ -265,7 +278,7 @@ static int test_scull_open(void)
 	return fail;
 }
 
-static int test_scull_attr_readi(void)
+static int test_scull_attr_readl(void)
 {
 	const struct test {
 		const char	*name;
@@ -303,7 +316,7 @@ static int test_scull_attr_readi(void)
 	int fail = 0;
 
 	for (t = tests; t->name; t++) {
-		int err = test_attr_readi(t->path, t->want);
+		int err = test_attr_readl(t->path, t->want);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -423,6 +436,7 @@ static int test_scull_writen(void)
 
 	for (t = tests; t->name; t++) {
 		char path[BUFSIZ];
+		long quantum, bufsize;
 		int err;
 
 		err = sprintf(path, "/dev/%s", t->dev);
@@ -449,7 +463,23 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = test_attr_readi(path, t->len*t->count);
+		err = test_attr_readl(path, t->len*t->count);
+		if (err) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = sprintf(path, "/sys/devices/%s/quantum", t->dev);
+		if (err == -1) {
+			errno = err;
+			perror(t->name);
+			ksft_inc_fail_cnt();
+			fail++;
+			continue;
+		}
+		err = test_attr_getl(path, &quantum);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -465,7 +495,13 @@ static int test_scull_writen(void)
 			fail++;
 			continue;
 		}
-		err = test_attr_readi(path, t->len*t->count);
+		bufsize = 0;
+		if (t->len*t->count) {
+			bufsize = ((t->len*t->count)/quantum)*quantum;
+			if ((t->len*t->count)%quantum)
+				bufsize += quantum;
+		}
+		err = test_attr_readl(path, bufsize);
 		if (err) {
 			errno = err;
 			perror(t->name);
@@ -562,7 +598,7 @@ int main(void)
 	int fail;
 
 	fail = test_scull_open();
-	fail += test_scull_attr_readi();
+	fail += test_scull_attr_readl();
 	fail += test_scull_readn();
 	fail += test_scull_writen();
 	fail += test_scull_writen_and_readn();
