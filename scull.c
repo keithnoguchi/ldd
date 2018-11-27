@@ -87,8 +87,25 @@ static void scull_trim(struct scull_device *d)
  * The device should be locked by the caller. */
 static void *scull_lookup(struct scull_device *d, loff_t pos)
 {
-	/* TBD */
-	return NULL;
+	loff_t ssize = d->qset*d->quantum;
+	struct scull_qset *qptr;
+	loff_t spos, qpos;
+	int i;
+
+	/* find the quantum set */
+	qptr = d->data;
+	spos = pos/ssize;
+	for (i = 0; i < spos; i++) {
+		qptr = qptr->next;
+		if (qptr == NULL)
+			return NULL;
+	}
+	if (qptr == NULL || qptr->data == NULL)
+		return NULL;
+
+	/* find the quantum */
+	qpos = (pos%ssize)/d->quantum;
+	return qptr->data[qpos];
 }
 
 /* scull_get gets the quantum for write operation.
@@ -233,26 +250,26 @@ static loff_t scull_llseek(struct file *f, loff_t offset, int whence)
 static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *pos)
 {
 	struct scull_device *d = f->private_data;
-	void *qptr;
-	loff_t qpos;
+	void *dptr;
+	loff_t dpos;
 	ssize_t ret;
 
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
 	if (*pos+len > d->size)
 		len = d->size-*pos;
-	ret = -EINVAL;
-	qptr = scull_lookup(d, *pos);
-	if (qptr)
-		goto out;
 	/* support per quantum read only */
-	qpos = *pos%d->quantum;
-	if (qpos+len > d->quantum)
-		len = d->quantum-qpos;
+	dpos = *pos%d->quantum;
+	if (dpos+len > d->quantum)
+		len = d->quantum-dpos;
 	ret = 0;
 	if (len == 0)
 		goto out;
-	ret = copy_to_user(buf, qptr+qpos, len);
+	ret = -EINVAL;
+	dptr = scull_lookup(d, *pos);
+	if (dptr == NULL)
+		goto out;
+	ret = copy_to_user(buf, dptr+dpos, len);
 	if (unlikely(ret))
 		len -= ret;
 	*pos += len;
