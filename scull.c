@@ -83,35 +83,8 @@ static void scull_trim(struct scull_device *d)
 	d->size = 0;
 }
 
-/* scull_lookup looks up the quantum for the read operation.
- * The device should be locked by the caller. */
-static void *scull_lookup(struct scull_device *d, loff_t pos)
-{
-	loff_t ssize = d->qset*d->quantum;
-	struct scull_qset *qptr;
-	size_t spos, sres, qpos;
-	int i;
-
-	/* find the quantum set */
-	qptr = d->data;
-	spos = pos/ssize;
-	for (i = 0; i < spos; i++) {
-		if (qptr == NULL)
-			return NULL;
-		qptr = qptr->next;
-	}
-	if (qptr == NULL || qptr->data == NULL)
-		return NULL;
-
-	/* find the quantum */
-	sres = pos%ssize;
-	qpos = sres/d->quantum;
-	return qptr->data[qpos];
-}
-
-/* scull_get gets the quantum for write operation.
- * The device should be locked by the caller. */
-static void *scull_get(struct scull_device *d, loff_t pos)
+/* scull_follow follows the scull qset and find the quantum */
+static void *scull_follow(struct scull_device *d, loff_t pos)
 {
 	loff_t ssize = d->qset*d->quantum;
 	struct scull_qset **qptr;
@@ -264,8 +237,8 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 	ret = 0;
 	if (*pos >= d->size)
 		goto out;
-	ret = -EINVAL;
-	dptr = scull_lookup(d, *pos);
+	ret = -ENOMEM;
+	dptr = scull_follow(d, *pos);
 	if (dptr == NULL)
 		goto out;
 	/* support per quantum read only */
@@ -296,7 +269,7 @@ static ssize_t scull_write(struct file *f, const char __user *buf, size_t len, l
 		return -ERESTARTSYS;
 	/* find the quantum */
 	ret = -ENOMEM;
-	dptr = scull_get(d, *pos);
+	dptr = scull_follow(d, *pos);
 	if (dptr == NULL)
 		goto out;
 	/* support per quantum write only */
