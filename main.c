@@ -6,6 +6,7 @@
 
 #include "ldd.h"
 #include "scull.h"
+#include "sleepy.h"
 #include "sculld.h"
 
 static int ldd_bus_match(struct device *dev, struct device_driver *drv)
@@ -45,11 +46,16 @@ static int __init ldd_init(void)
 	err = scull_register();
 	if (err)
 		goto error_scull;
+	err = sleepy_register();
+	if (err)
+		goto error_sleepy;
 	err = sculld_register();
 	if (err)
 		goto error_sculld;
 	return 0;
 error_sculld:
+	sleepy_unregister();
+error_sleepy:
 	scull_unregister();
 error_scull:
 	bus_unregister(&ldd_bus_type);
@@ -61,6 +67,7 @@ module_init(ldd_init);
 static void __exit ldd_exit(void)
 {
 	sculld_unregister();
+	sleepy_unregister();
 	scull_unregister();
 	bus_unregister(&ldd_bus_type);
 	printk(KERN_INFO "Have a wonderful day!\n");
@@ -69,3 +76,4 @@ module_exit(ldd_exit);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Noguchi <mail@keinoguchi.com>");
+MODULE_DESCRIPTION("Linux Device Driver in Action");

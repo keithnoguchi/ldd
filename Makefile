@@ -2,6 +2,7 @@
 obj-m    += ldd.o
 ldd-objs := main.o
 ldd-objs += scull.o
+ldd-objs += sleepy.o
 ldd-objs += sculld.o
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules

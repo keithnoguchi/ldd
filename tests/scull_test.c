@@ -1,13 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <stdio.h>
+#include <string.h>
+#include <limits.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <errno.h>
-#include <limits.h>
-#include <string.h>
 #include "kselftest.h"
 
 static int test_open(const char *path, int flags)
