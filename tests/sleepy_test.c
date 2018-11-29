@@ -19,28 +19,31 @@ static int test_sleepy_open(void)
 {
 	const struct test {
 		const char	*name;
+		const char	*path;
 		int		flags;
 	} tests[] = {
 		{
-			.name	= "/dev/sleepy read only open",
+			.name	= "sleepy1 read only open",
+			.path	= "/dev/sleepy1",
 			.flags	= O_RDONLY,
 		},
 		{
-			.name	= "/dev/sleepy write only open",
+			.name	= "sleepy1 write only open",
+			.path	= "/dev/sleepy1",
 			.flags	= O_WRONLY,
 		},
 		{
-			.name	= "/dev/sleepy read-write open",
+			.name	= "sleepy1 read-write open",
+			.path	= "/dev/sleepy1",
 			.flags	= O_RDWR,
 		},
 		{},	/* sentry */
 	};
-	const char *path = "/dev/sleepy";
 	const struct test *tc;
 	int fail = 0;
 
 	for (tc = tests; tc->name; tc++) {
-		int err = test_open(path, tc->flags);
+		int err = test_open(tc->path, tc->flags);
 		if (err) {
 			errno = err;
 			perror(tc->name);
