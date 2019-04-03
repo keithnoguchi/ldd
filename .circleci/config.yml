@@ -26,7 +26,8 @@ jobs:
       - run:
           name: Install kernel source code
           command: |
-            apt get -y linux-image-$(uname -r)
+            apt update
+            apt install -y linux-source
       - persist_to_workspace:
           root: /
           paths:
