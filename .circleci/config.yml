@@ -1,0 +1,47 @@
+---
+version: 2
+default: &defaults
+  working_directory: /home/circleci/project/ldd
+  docker:
+    - image: gcc:latest
+workflows:
+  version: 2
+  build_clean:
+    jobs:
+      - checkout
+      - build:
+          requires:
+            - checkout
+      - load:
+          requires:
+            - checkout
+      - test:
+          requires:
+            - checkout
+jobs:
+  checkout:
+    <<: *defaults
+    steps:
+      - checkout
+      - persist_to_workspace:
+          root: /home/circleci/project/ldd
+          paths:
+            - .
+  build:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /home/circleci/project/ldd
+      - run: make
+  load:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /home/circleci/project/ldd
+      - run: make load
+  test:
+    <<: *defaults
+    steps:
+      - attach_workspace:
+          at: /home/circleci/project/ldd
+      - run: make test
