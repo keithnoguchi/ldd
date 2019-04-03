@@ -2,6 +2,7 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
+#include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/slab.h>
@@ -131,7 +132,7 @@ static const struct file_operations sculld_fops = {
 	.release	= sculld_release,
 };
 
-int __init sculld_register(void)
+static int __init init(void)
 {
 	struct sculld_device *dev, *dev_err = NULL;
 	dev_t devt;
@@ -176,8 +177,9 @@ out:
 	ldd_unregister_driver(&driver);
 	return err;
 }
+module_init(init);
 
-void sculld_unregister(void)
+static void __exit term(void)
 {
 	struct sculld_device *dev;
 
@@ -190,3 +192,8 @@ void sculld_unregister(void)
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 	ldd_unregister_driver(&driver);
 }
+module_exit(term);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
+MODULE_DESCRIPTION("SCULL under LDD bus");

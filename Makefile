@@ -2,6 +2,7 @@
 MODS := scull
 MODS += sleepy
 MODS += ldd
+MODS += sculld
 obj-m += $(patsubst %,%.o,$(MODS))
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules
