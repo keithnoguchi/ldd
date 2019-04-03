@@ -32,6 +32,7 @@ jobs:
             - usr/bin/gcc
             - usr/bin/make
             - usr/lib/libgc.so*
+            - usr/lib/libltdl.so*
             - usr/lib/libguile-2.2.so*
             - home/circleci/project/ldd
   build:
