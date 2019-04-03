@@ -1,4 +1,4 @@
-ldd.ko
+*.ko
 *_test
 *.o
 .*
