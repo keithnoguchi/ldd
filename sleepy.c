@@ -2,6 +2,7 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
+#include <linux/module.h>
 #include <linux/miscdevice.h>
 #include <linux/fs.h>
 #include <linux/wait.h>
@@ -73,7 +74,7 @@ static struct sleepy_device devices[] = {
 	{},	/* sentry */
 };
 
-int sleepy_register(void)
+static int __init init(void)
 {
 	struct sleepy_device *d, *d_err;
 	int err;
@@ -93,8 +94,9 @@ out:
 		misc_deregister(&d->dev);
 	return err;
 }
+module_init(init);
 
-void sleepy_unregister(void)
+static void __exit term(void)
 {
 	struct sleepy_device *d;
 
@@ -105,3 +107,8 @@ void sleepy_unregister(void)
 		misc_deregister(&d->dev);
 	}
 }
+module_exit(term);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
+MODULE_DESCRIPTION("Sleepy Device");

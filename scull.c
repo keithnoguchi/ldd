@@ -320,7 +320,7 @@ static const struct file_operations scull_fops = {
 };
 
 /* Scull registration */
-static int __init scull_init(void)
+static int __init init(void)
 {
 	struct scull_device *d, *d_err = NULL;
 	dev_t devt;
@@ -357,9 +357,9 @@ out:
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 	return err;
 }
-module_init(scull_init);
+module_init(init);
 
-static void scull_exit(void)
+static void __exit term(void)
 {
 	struct scull_device *d;
 
@@ -369,7 +369,7 @@ static void scull_exit(void)
 	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 }
-module_exit(scull_exit);
+module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
