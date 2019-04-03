@@ -3,7 +3,7 @@ version: 2
 default: &defaults
   working_directory: /home/circleci/project/ldd
   docker:
-    - image: archlinux/base:latest
+    - image: gcc:latest
 workflows:
   version: 2
   build_clean:
@@ -24,13 +24,13 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install base commands
+          name: Install kernel source code
           command: |
-            pacman -Sy --noconfirm gcc
+            apt get -y linux-image-$(uname -r)
       - persist_to_workspace:
           root: /
           paths:
-            - usr/bin/gcc
+            - lib/modules/$(uname -r)
             - home/circleci/project/ldd
   build:
     <<: *defaults
