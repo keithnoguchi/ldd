@@ -3,7 +3,7 @@ version: 2
 default: &defaults
   working_directory: /home/circleci/project/ldd
   docker:
-    - image: gcc:latest
+    - image: archlinux/base:latest
 workflows:
   version: 2
   build_clean:
@@ -21,24 +21,26 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kernel source code
+          name: Install kernel source code and the build tools
           command: |
-            apt update
-            apt install -y linux-image-amd64
+            pacman -Sy
+            pacman -S --noconfirm linux linux-headers gcc make
       - persist_to_workspace:
           root: /
           paths:
             - lib/modules/
+            - usr/bin/gcc
+            - usr/bin/make
             - home/circleci/project/ldd
   build:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run: KERNDIR=$(ls -d /lib/modules/*-amd64|head -1)/build make
+      - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make
   install:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run: KERNDIR=$(ls -d /lib/modules/*-amd64|head -1)/build sudo -E make install
+      - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build sudo -E make install
