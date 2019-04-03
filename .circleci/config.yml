@@ -12,10 +12,7 @@ workflows:
       - build:
           requires:
             - checkout
-      - load:
-          requires:
-            - checkout
-      - test:
+      - install:
           requires:
             - checkout
 jobs:
@@ -27,27 +24,21 @@ jobs:
           name: Install kernel source code
           command: |
             apt update
-            apt install -y linux-source
+            apt install -y linux-image-amd64
       - persist_to_workspace:
           root: /
           paths:
-            - lib/modules/$(uname -r)
+            - lib/modules/
             - home/circleci/project/ldd
   build:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run: make
-  load:
+      - run: KERNDIR=$(ls -d /lib/modules/*-amd64|head -1)/build make
+  install:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run: make load
-  test:
-    <<: *defaults
-    steps:
-      - attach_workspace:
-          at: /
-      - run: make test
+      - run: KERNDIR=$(ls -d /lib/modules/*-amd64|head -1)/build sudo -E make install
