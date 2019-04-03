@@ -1,13 +1,14 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <limits.h>
-#include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
 #include "kselftest.h"
 
 static int test_open(const char *path, int flags)
@@ -254,10 +255,10 @@ out:
 static int test_scull_open(void)
 {
 	const struct test {
-		const char	*name;
-		const char	*path;
+		const char	*const name;
+		const char	*const path;
 		int		flags;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "scull0 read only open",
 			.path	= "/dev/scull0",
@@ -275,7 +276,6 @@ static int test_scull_open(void)
 		},
 		{}, /* sentory */
 	};
-	const struct test *t;
 	int fail = 0;
 
 	for (t = tests; t->name; t++) {

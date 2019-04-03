@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+
 #include "kselftest.h"
 
 static int test_open(const char *path, int flags)
@@ -18,10 +19,10 @@ static int test_open(const char *path, int flags)
 static int test_sleepy_open(void)
 {
 	const struct test {
-		const char	*name;
-		const char	*path;
+		const char	*const name;
+		const char	*const path;
 		int		flags;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "sleepy1 read only open",
 			.path	= "/dev/sleepy1",
@@ -37,16 +38,15 @@ static int test_sleepy_open(void)
 			.path	= "/dev/sleepy1",
 			.flags	= O_RDWR,
 		},
-		{},	/* sentry */
+		{.name = NULL},	/* sentry */
 	};
-	const struct test *tc;
 	int fail = 0;
 
-	for (tc = tests; tc->name; tc++) {
-		int err = test_open(tc->path, tc->flags);
+	for (t = tests; t->name; t++) {
+		int err = test_open(t->path, t->flags);
 		if (err) {
 			errno = err;
-			perror(tc->name);
+			perror(t->name);
 			ksft_inc_fail_cnt();
 			fail++;
 			continue;

@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <unistd.h>
+
 #include "kselftest.h"
 
 static int test_opendir(const char *path)
@@ -30,10 +31,10 @@ static int test_open_file_write_only(const char *path)
 static int test_ldd_open(void)
 {
 	const struct test {
-		const char	*name;
-		const char	*path;
+		const char	*const name;
+		const char	*const path;
 		const int	(*func)(const char *path);
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "ldd bus directory",
 			.path	= "/sys/bus/ldd",
@@ -44,9 +45,8 @@ static int test_ldd_open(void)
 			.path	= "/sys/bus/ldd/uevent",
 			.func	= test_open_file_write_only,
 		},
-		{},	/* sentry */
+		{.name = NULL},	/* sentry */
 	};
-	const struct test *t;
 	int fail = 0;
 	int err;
 

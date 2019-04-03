@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <stdio.h>
+#include <string.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <unistd.h>
+#include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
-#include <dirent.h>
-#include <stdio.h>
-#include <errno.h>
-#include <string.h>
-#include <unistd.h>
+
 #include "kselftest.h"
 
 static int test_opendir(const char *path)
