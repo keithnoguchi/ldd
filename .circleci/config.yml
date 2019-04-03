@@ -24,13 +24,15 @@ jobs:
           name: Install kernel source code and the build tools
           command: |
             pacman -Sy
-            pacman -S --noconfirm linux linux-headers tar gcc make
+            pacman -S --noconfirm linux linux-headers gcc make
       - persist_to_workspace:
           root: /
           paths:
             - lib/modules/
             - usr/bin/gcc
             - usr/bin/make
+            - usr/lib/libguile-2.2.so
+            - usr/lib/libguile-2.2.so.1
             - home/circleci/project/ldd
   build:
     <<: *defaults
