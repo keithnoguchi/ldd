@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
-#ifndef _DRIVER_LDD_H
-#define _DRIVER_LDD_H
+#ifndef _LDD_H
+#define _LDD_H
 
 extern struct bus_type ldd_bus_type;
 
@@ -31,4 +31,4 @@ static inline void ldd_unregister_driver(struct device_driver *drv)
 	driver_unregister(drv);
 }
 
-#endif /* _DRIVER_LDD_H */
+#endif /* _LDD_H */

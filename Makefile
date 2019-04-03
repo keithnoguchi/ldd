@@ -1,8 +1,8 @@
 # SPDX-License-Idenfitier: GPL-2.0
-MODS  := scull
-MODS  += sleepy
+MODS := scull
+MODS += sleepy
+MODS += ldd
 obj-m += $(patsubst %,%.o,$(MODS))
-#ldd-objs += sculld.o
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install

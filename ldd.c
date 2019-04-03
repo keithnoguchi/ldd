@@ -4,11 +4,6 @@
 #include <linux/device.h>
 #include <linux/string.h>
 
-#include "ldd.h"
-#include "scull.h"
-#include "sleepy.h"
-#include "sculld.h"
-
 static int ldd_bus_match(struct device *dev, struct device_driver *drv)
 {
 	size_t len = strlen(drv->name);
@@ -35,44 +30,53 @@ struct bus_type ldd_bus_type = {
 	.match	= ldd_bus_match,
 };
 
-static int __init ldd_init(void)
+int ldd_register_device(struct device *dev)
+{
+	dev->bus = &ldd_bus_type;
+	return device_register(dev);
+}
+EXPORT_SYMBOL(ldd_register_device);
+
+void ldd_unregister_device(struct device *dev)
+{
+	device_unregister(dev);
+}
+EXPORT_SYMBOL(ldd_unregister_device);
+
+void ldd_release_device(struct device *dev)
+{
+	printk(KERN_INFO "release %s device\n", dev_name(dev));
+}
+EXPORT_SYMBOL(ldd_release_device);
+
+int ldd_register_driver(struct device_driver *drv)
+{
+	drv->bus = &ldd_bus_type;
+	return driver_register(drv);
+}
+EXPORT_SYMBOL(ldd_register_driver);
+
+void ldd_unregister_driver(struct device_driver *drv)
+{
+	driver_unregister(drv);
+}
+EXPORT_SYMBOL(ldd_unregister_driver);
+
+static int __init init(void)
 {
 	int err;
-
-	printk(KERN_INFO "Welcome to the wonderful kernel world!\n");
 	err = bus_register(&ldd_bus_type);
 	if (err)
-		goto error;
-	err = scull_register();
-	if (err)
-		goto error_scull;
-	err = sleepy_register();
-	if (err)
-		goto error_sleepy;
-	err = sculld_register();
-	if (err)
-		goto error_sculld;
+		return err;
 	return 0;
-error_sculld:
-	sleepy_unregister();
-error_sleepy:
-	scull_unregister();
-error_scull:
-	bus_unregister(&ldd_bus_type);
-error:
-	return err;
 }
-module_init(ldd_init);
+module_init(init);
 
-static void __exit ldd_exit(void)
+static void __exit term(void)
 {
-	sculld_unregister();
-	sleepy_unregister();
-	scull_unregister();
 	bus_unregister(&ldd_bus_type);
-	printk(KERN_INFO "Have a wonderful day!\n");
 }
-module_exit(ldd_exit);
+module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Noguchi <mail@keinoguchi.com>");
