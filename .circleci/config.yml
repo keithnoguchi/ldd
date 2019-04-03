@@ -23,25 +23,30 @@ jobs:
     <<: *defaults
     steps:
       - checkout
+      - run:
+          name: Install base commands
+          command: |
+            pacman -Syu gcc
       - persist_to_workspace:
-          root: /home/circleci/project/ldd
+          root: /
           paths:
-            - .
+            - usr/bin/gcc
+            - home/circleci/project/ldd
   build:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /home/circleci/project/ldd
+          at: /
       - run: make
   load:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /home/circleci/project/ldd
+          at: /
       - run: make load
   test:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /home/circleci/project/ldd
+          at: /
       - run: make test
