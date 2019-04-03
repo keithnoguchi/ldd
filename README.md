@@ -1,6 +1,6 @@
 # Linux Device Driver in Action
 
-[LDD] and [LKD] in action!
+[LDD] in action!
 
 ## Build
 
