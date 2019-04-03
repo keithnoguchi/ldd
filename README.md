@@ -4,24 +4,17 @@
 
 ## Build
 
-`make` will build the `ldd.ko` kernel module for you.
-
 ```sh
 make
 ```
 
 ## Test
 
-`sudo make test` will load the module and unit test it for you.
-
 ```sh
 sudo make test
 ```
 
 ## Cleanup
-
-`sudo make test` will unload the module and cleanup the local
-build environment for you.
 
 ```sh
 sudo make clean
