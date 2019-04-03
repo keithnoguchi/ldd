@@ -2,6 +2,7 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
+#include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/semaphore.h>
@@ -319,7 +320,7 @@ static const struct file_operations scull_fops = {
 };
 
 /* Scull registration */
-int __init scull_register(void)
+static int __init scull_init(void)
 {
 	struct scull_device *d, *d_err = NULL;
 	dev_t devt;
@@ -356,8 +357,9 @@ out:
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 	return err;
 }
+module_init(scull_init);
 
-void scull_unregister(void)
+static void scull_exit(void)
 {
 	struct scull_device *d;
 
@@ -367,3 +369,8 @@ void scull_unregister(void)
 	}
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));
 }
+module_exit(scull_exit);
+
+MODULE_LICENSE("GPL");
+MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
+MODULE_DESCRIPTION("Simple Character Utility for Loading Localities");

@@ -1,9 +1,9 @@
 # SPDX-License-Idenfitier: GPL-2.0
-obj-m    += ldd.o
-ldd-objs := main.o
-ldd-objs += scull.o
-ldd-objs += sleepy.o
-ldd-objs += sculld.o
+obj-m += scull.o
+#ldd-objs := main.o
+#ldd-objs += scull.o
+#ldd-objs += sleepy.o
+#ldd-objs += sculld.o
 KERNDIR ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install
@@ -18,6 +18,6 @@ run_tests:
 	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests \
 		CFLAGS="-I$(KERNDIR)/tools/testing/selftests -I$(shell pwd)" $@
 load:
-	modprobe ldd
+	modprobe scull
 unload:
-	-rmmod ldd
+	-rmmod scull
