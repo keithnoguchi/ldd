@@ -57,7 +57,7 @@ jobs:
           name: install tar for the workspace attachment
           command: |
             pacman -Sy
-            pacman -S --noconfirm tar sudo
+            pacman -S --noconfirm tar
       - attach_workspace:
           at: /
-      - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build sudo -E make install
+      - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make install
