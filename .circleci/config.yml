@@ -29,6 +29,7 @@ jobs:
           root: /
           paths:
             - lib/modules/
+            - usr/bin/as
             - usr/bin/gcc
             - usr/bin/make
             - usr/bin/grep
