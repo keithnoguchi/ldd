@@ -12,12 +12,12 @@ modules modules_install help:
 clean: clean_tests
 	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
 load:
-	@for mod in $(MODS); do modprobe $$mod; done
+	for mod in $(MODS); do modprobe $$mod; done
 unload:
-	@-for mod in $(MODS); do rmmod $$mod; done
+	-for mod in $(MODS); do modprobe -r $$mod; done
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
-test: unload modules modules_install load run_tests
+test: modules_install load run_tests
 run_tests:
 	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests \
 		CFLAGS="-I$(KERNDIR)/tools/testing/selftests -I$(shell pwd)" $@
