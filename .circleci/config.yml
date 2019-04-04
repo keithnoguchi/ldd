@@ -34,6 +34,7 @@ jobs:
             - usr/bin/grep
             - usr/lib/libgc.so*
             - usr/lib/libmpc.so*
+            - usr/lib/libmpfr.so*
             - usr/lib/libltdl.so*
             - usr/lib/libguile-2.2.so*
             - usr/lib/gcc/x86_64-pc-linux-gnu
