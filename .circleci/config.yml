@@ -23,8 +23,7 @@ jobs:
       - run:
           name: Install kernel source code and the build tools
           command: |
-            pacman -Sy
-            pacman -S --noconfirm linux linux-headers gcc make grep
+            pacman -Sy --noconfirm linux linux-headers gcc make grep
       - persist_to_workspace:
           root: /
           paths:
@@ -47,10 +46,8 @@ jobs:
     <<: *defaults
     steps:
       - run:
-          name: install tar for the workspace attachment
-          command: |
-            pacman -Sy
-            pacman -S --noconfirm tar
+          name: install tar to attach to the workspace
+          command: pacman -Sy --noconfirm tar
       - attach_workspace:
           at: /
       - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make
@@ -58,10 +55,8 @@ jobs:
     <<: *defaults
     steps:
       - run:
-          name: install tar for the workspace attachment
-          command: |
-            pacman -Sy
-            pacman -S --noconfirm tar sudo
+          name: install tar to attach to the workspace
+          command: pacman -Sy --noconfirm tar sudo
       - attach_workspace:
           at: /
       - run: KERNDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build sudo -E make install
