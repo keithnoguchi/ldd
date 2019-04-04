@@ -8,24 +8,11 @@
 #include <linux/wait.h>
 #include <linux/semaphore.h>
 
-/* miscdevice based sleepy devices */
-static struct sleepy_device {
+struct sleepy_device {
 	struct semaphore	lock;
 	int			condition;
 	wait_queue_head_t	wq;
 	struct miscdevice	dev;
-} devices[] = {
-	{
-		.dev.minor	= MISC_DYNAMIC_MINOR,
-		.dev.name	= "sleepy0",
-		.dev.fops	= &sleepy_fops,
-	},
-	{
-		.dev.minor	= MISC_DYNAMIC_MINOR,
-		.dev.name	= "sleepy1",
-		.dev.fops	= &sleepy_fops,
-	},
-	{},	/* sentry */
 };
 
 /* sleep device file operations */
@@ -70,6 +57,21 @@ static const struct file_operations sleepy_fops = {
 	.read		= sleepy_read,
 	.write		= sleepy_write,
 	.release	= sleepy_release,
+};
+
+/* miscdevice based sleepy device */
+static struct sleepy_device devices[] = {
+	{
+		.dev.minor	= MISC_DYNAMIC_MINOR,
+		.dev.name	= "sleepy0",
+		.dev.fops	= &sleepy_fops,
+	},
+	{
+		.dev.minor	= MISC_DYNAMIC_MINOR,
+		.dev.name	= "sleepy1",
+		.dev.fops	= &sleepy_fops,
+	},
+	{},	/* sentry */
 };
 
 static int __init init(void)
