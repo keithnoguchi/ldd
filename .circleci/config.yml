@@ -30,17 +30,18 @@ jobs:
           paths:
             - lib/modules/
             - usr/bin/as
+            - usr/bin/ld
             - usr/bin/gcc
             - usr/bin/make
             - usr/bin/grep
+            - usr/lib/libopcodes-*
+            - usr/lib/libbfd-*
             - usr/lib/libgc.so*
             - usr/lib/libmpc.so*
             - usr/lib/libmpfr.so*
             - usr/lib/libltdl.so*
             - usr/lib/libguile-2.2.so*
             - usr/lib/gcc/x86_64-pc-linux-gnu
-            - usr/lib/libopcodes-*
-            - usr/lib/libbfd-*
             - home/circleci/project/ldd
   build:
     <<: *defaults
