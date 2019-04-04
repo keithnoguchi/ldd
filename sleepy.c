@@ -85,11 +85,11 @@ static int __init init(void)
 		init_waitqueue_head(&d->wq);
 		if ((err = misc_register(&d->dev))) {
 			d_err = d;
-			goto out;
+			goto err;
 		}
 	}
 	return 0;
-out:
+err:
 	for (d = devices; d != d_err; d++)
 		misc_deregister(&d->dev);
 	return err;

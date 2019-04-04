@@ -347,11 +347,11 @@ static int __init init(void)
 		err = cdev_device_add(&d->cdev, &d->dev);
 		if (err) {
 			d_err = d;
-			goto out;
+			goto err;
 		}
 	}
 	return 0;
-out:
+err:
 	for (d = devices; d != d_err; d++)
 		cdev_device_del(&d->cdev, &d->dev);
 	unregister_chrdev_region(devices[0].dev.devt, ARRAY_SIZE(devices));

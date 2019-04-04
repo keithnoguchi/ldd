@@ -71,7 +71,6 @@ static struct device_type sculld_device_type = {
 	.groups	= sculld_groups,
 };
 
-
 static int sculld_open(struct inode *i, struct file *f)
 {
 	struct sculld_device *d = container_of(i->i_cdev, struct sculld_device, cdev);
@@ -147,7 +146,7 @@ static int __init init(void)
 	/* sculld devices */
 	err = alloc_chrdev_region(&devt, 0, ARRAY_SIZE(devices), driver.name);
 	if (err)
-		goto out;
+		goto err;
 	i = 0;
 	for (dev = &devices[0]; dev->dev.init_name; dev++) {
 		dev->dev.type = &sculld_device_type;
@@ -155,18 +154,18 @@ static int __init init(void)
 		err = ldd_register_device(&dev->dev);
 		if (err) {
 			dev_err = --dev;
-			goto out;
+			goto err;
 		}
 		cdev_init(&dev->cdev, &sculld_fops);
 		cdev_set_parent(&dev->cdev, &dev->dev.kobj);
 		err = cdev_add(&dev->cdev, dev->dev.devt, 1);
 		if (err) {
 			dev_err = dev;
-			goto out;
+			goto err;
 		}
 	}
 	return 0;
-out:
+err:
 	if (dev_err)
 		for (dev = &devices[0]; dev != dev_err; dev++) {
 			cdev_del(&dev->cdev);
