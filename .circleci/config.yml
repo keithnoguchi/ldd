@@ -39,6 +39,7 @@ jobs:
             - usr/lib/libltdl.so*
             - usr/lib/libguile-2.2.so*
             - usr/lib/gcc/x86_64-pc-linux-gnu
+            - usr/lib/libopcodes-*
             - home/circleci/project/ldd
   build:
     <<: *defaults
