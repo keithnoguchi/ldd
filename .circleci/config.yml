@@ -19,11 +19,15 @@ jobs:
   checkout:
     <<: *defaults
     steps:
+      - run:
+          name: Install git/ssh and tar for the checkout/workspace creation
+          command: |
+            pacman -Sy --noconfirm git openssh tar
       - checkout
       - run:
           name: Install kernel source code and the build tools
           command: |
-            pacman -Sy --noconfirm linux linux-headers gcc make grep
+            pacman -S --noconfirm linux linux-headers gcc make grep
       - persist_to_workspace:
           root: /
           paths:
