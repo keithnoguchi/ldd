@@ -1,23 +1,19 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
-#include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/semaphore.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-/* Scull driver */
-static struct scull_driver {
-	size_t			qset;
-	size_t			quantum;
-	struct device_driver	drv;
-} scull_driver = {
-	.qset		= 1024,
-	.quantum	= PAGE_SIZE,
-	.drv.name	= "scull",
+/* Scull quantum set */
+struct scull_qset {
+	struct scull_qset	*next;
+	void			**data;
 };
 
 /* Scull devices */
@@ -37,10 +33,15 @@ static struct scull_device {
 	{},	/* sentry */
 };
 
-/* Scull quantum set */
-struct scull_qset {
-	struct scull_qset	*next;
-	void			**data;
+/* Scull driver */
+static struct scull_driver {
+	size_t			qset;
+	size_t			quantum;
+	struct device_driver	drv;
+} scull_driver = {
+	.qset		= 1024,
+	.quantum	= PAGE_SIZE,
+	.drv.name	= "scull",
 };
 
 /* scull_alloc allocates a new scull_qset. */
@@ -196,7 +197,7 @@ static const struct attribute_group *scull_groups[] = {
 };
 
 /* Scull device type to carry the device attributes. */
-static struct device_type device_type = {
+static struct device_type scull_device_type = {
 	.name	= "scull",
 	.groups	= scull_groups,
 };
@@ -340,7 +341,7 @@ static int __init init(void)
 		d->qset = scull_driver.qset;
 		d->quantum = scull_driver.quantum;
 		d->dev.driver = &scull_driver.drv;
-		d->dev.type = &device_type;
+		d->dev.type = &scull_device_type;
 		d->dev.devt = MKDEV(MAJOR(devt), MINOR(devt)+i);
 		device_initialize(&d->dev);
 		cdev_init(&d->cdev, &scull_fops);
