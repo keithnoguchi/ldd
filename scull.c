@@ -217,6 +217,7 @@ static loff_t scull_llseek(struct file *f, loff_t offset, int whence)
 		break;
 	case SEEK_CUR:
 		pos = f->f_pos + offset;
+		break;
 	case SEEK_END:
 		pos = d->size + offset;
 		break;
@@ -235,9 +236,9 @@ static ssize_t scull_read(struct file *f, char __user *buf, size_t len, loff_t *
 
 	if (down_interruptible(&d->sem))
 		return -ERESTARTSYS;
-	/* out of baund read */
 	ret = 0;
 	if (*pos >= d->size)
+		/* out of bound read */
 		goto out;
 	ret = -ENOMEM;
 	dptr = scull_follow(d, *pos);
