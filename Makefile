@@ -1,16 +1,16 @@
 # SPDX-License-Idenfitier: GPL-2.0
-MODS    := scull
-MODS    += sleepy
-MODS    += ldd
-MODS    += sculld
-obj-m   += $(patsubst %,%.o,$(MODS))
-KERNDIR ?= /lib/modules/$(shell uname -r)/build
+MODS  := scull
+MODS  += sleepy
+MODS  += ldd
+MODS  += sculld
+obj-m += $(patsubst %,%.o,$(MODS))
+KDIR  ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install
 modules modules_install help:
-	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
+	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 clean: clean_tests
-	$(MAKE) -C $(KERNDIR) M=$(shell pwd) $@
+	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 load:
 	for mod in $(MODS); do modprobe $$mod; done
 unload:
@@ -19,7 +19,7 @@ unload:
 .PHONY: test run_tests clean_tests
 test: modules_install load run_tests
 run_tests:
-	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests \
-		CFLAGS="-I$(KERNDIR)/tools/testing/selftests -I$(shell pwd)" $@
+	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests \
+		CFLAGS="-I$(KDIR)/tools/testing/selftests -I$(shell pwd)" $@
 clean_tests:
-	$(MAKE) -C tests top_srcdir=$(KERNDIR) OUTPUT=$(shell pwd)/tests clean
+	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
