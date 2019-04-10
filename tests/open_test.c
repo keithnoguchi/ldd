@@ -6,6 +6,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
+#include <poll.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -16,16 +17,24 @@ struct test {
 	const char	*const dev;
 	int		flags;
 	int		open_nr;
+	int		fork_nr;
 	int		close_nr;
+	int		want_nr;
 	int		want;
 };
 
+static void msleep(long msec)
+{
+	int ret = poll(NULL, 0, msec);
+	if (ret == -1)
+		perror("poll");
+}
+
 static void test(const struct test *const t)
 {
-#ifndef NR_OPEN
-#define NR_OPEN 1024
-#endif /* NR_OPEN */
-	int fds[NR_OPEN];
+	int status = EXIT_FAILURE;
+	pid_t pids[t->fork_nr];
+	int fds[t->open_nr];
 	char buf[LINE_MAX];
 	int i, ret;
 	FILE *fp;
@@ -37,43 +46,70 @@ static void test(const struct test *const t)
 		if (ret == -1) {
 			fprintf(stderr, "%s: %s\n",
 				t->name, strerror(errno));
-			exit(EXIT_FAILURE);
+			goto fail;
 		}
 		fds[i] = ret;
+	}
+	for (i = 0; i < t->fork_nr; i++) {
+		pid_t pid = fork();
+		if (pid == -1) {
+			fprintf(stderr, "%s: %s\n",
+				t->name, strerror(errno));
+			goto fail;
+		} else if (pid == 0) {
+			/* 10 sleep */
+			const char *argv[] = {"sleep", "10", NULL};
+			ret = execvp(argv[0], argv);
+			if (ret == -1) {
+				fprintf(stderr, "%s: %s\n",
+					t->name, strerror(errno));
+				goto fail;
+			}
+			/* not reach */
+		}
+		pids[i] = pid;
 	}
 	for (i = 0; i < t->close_nr; i++) {
 		ret = close(fds[i]);
 		if (ret == -1) {
 			fprintf(stderr, "%s: %s\n",
 				t->name, strerror(errno));
-			exit(EXIT_FAILURE);
+			goto fail;
 		}
 	}
+	/* wait for 10ms for O_CLOEXEC behavior */
+	msleep(10);
 	sprintf(buf, "/sys/devices/%s/open_nr", t->dev);
 	fp = fopen(buf, "r");
 	if (fp == NULL) {
 		fprintf(stderr, "%s: %s\n",
 			t->name, strerror(errno));
-		exit(EXIT_FAILURE);
+		goto fail;
 	}
 	ret = fread(buf, LINE_MAX, 1, fp);
 	if (ret < 0) {
 		fprintf(stderr, "%s: %s\n",
 			t->name, strerror(errno));
-		exit(EXIT_FAILURE);
+		goto fail;
 	}
 	val = strtol(buf, NULL, 10);
 	if (val < 0 || val > INT_MAX) {
 		fprintf(stderr, "%s: wrong value in open_nr\n",
 			t->name);
-		exit(EXIT_FAILURE);
+		goto fail;
 	}
-	if (val != t->open_nr-t->close_nr) {
+	if (val != t->want_nr) {
 		fprintf(stderr, "%s: unexpected open_nr value:\n\t- want: %d\n\t-  got: %d\n",
-			t->name, t->open_nr-t->close_nr, val);
-		exit(EXIT_FAILURE);
+			t->name, t->want_nr, val);
+		goto fail;
 	}
-	exit(EXIT_SUCCESS);
+	status = EXIT_SUCCESS;
+fail:
+	for (i = 0; i < t->fork_nr; i++) {
+		kill(pids[i], SIGKILL);
+		waitpid(pids[i], NULL, 0);
+	}
+	exit(status);
 }
 
 int main(void)
@@ -84,7 +120,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_RDONLY,
 			.open_nr	= 1,
+			.fork_nr	= 0,
 			.close_nr	= 0,
+			.want_nr	= 1,
 			.want		= 0,
 		},
 		{
@@ -92,23 +130,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_RDONLY,
 			.open_nr	= 10,
+			.fork_nr	= 0,
 			.close_nr	= 0,
-			.want		= 0,
-		},
-		{
-			.name		= "1 open(open1, O_RDONLY) call",
-			.dev		= "open1",
-			.flags		= O_RDONLY,
-			.open_nr	= 1,
-			.close_nr	= 0,
-			.want		= 0,
-		},
-		{
-			.name		= "10 open(open1, O_RDONLY) calls",
-			.dev		= "open1",
-			.flags		= O_RDONLY,
-			.open_nr	= 10,
-			.close_nr	= 0,
+			.want_nr	= 10,
 			.want		= 0,
 		},
 		{
@@ -116,7 +140,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_WRONLY,
 			.open_nr	= 1,
+			.fork_nr	= 0,
 			.close_nr	= 0,
+			.want_nr	= 1,
 			.want		= 0,
 		},
 		{
@@ -124,23 +150,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_WRONLY,
 			.open_nr	= 10,
+			.fork_nr	= 0,
 			.close_nr	= 0,
-			.want		= 0,
-		},
-		{
-			.name		= "1 open(open1, O_WRONLY) call",
-			.dev		= "open1",
-			.flags		= O_WRONLY,
-			.open_nr	= 1,
-			.close_nr	= 0,
-			.want		= 0,
-		},
-		{
-			.name		= "10 open(open1, O_WRONLY) calls",
-			.dev		= "open1",
-			.flags		= O_WRONLY,
-			.open_nr	= 10,
-			.close_nr	= 0,
+			.want_nr	= 10,
 			.want		= 0,
 		},
 		{
@@ -148,7 +160,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_RDONLY,
 			.open_nr	= 1,
+			.fork_nr	= 0,
 			.close_nr	= 1,
+			.want_nr	= 0,
 			.want		= 0,
 		},
 		{
@@ -156,23 +170,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_RDONLY,
 			.open_nr	= 10,
+			.fork_nr	= 0,
 			.close_nr	= 10,
-			.want		= 0,
-		},
-		{
-			.name		= "1 open(open1, O_RDONLY) and 1 close() call",
-			.dev		= "open1",
-			.flags		= O_RDONLY,
-			.open_nr	= 1,
-			.close_nr	= 1,
-			.want		= 0,
-		},
-		{
-			.name		= "10 open(open1, O_RDONLY) and 10 close() calls",
-			.dev		= "open1",
-			.flags		= O_RDONLY,
-			.open_nr	= 10,
-			.close_nr	= 10,
+			.want_nr	= 0,
 			.want		= 0,
 		},
 		{
@@ -180,7 +180,9 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_WRONLY,
 			.open_nr	= 1,
+			.fork_nr	= 0,
 			.close_nr	= 1,
+			.want_nr	= 0,
 			.want		= 0,
 		},
 		{
@@ -188,23 +190,129 @@ int main(void)
 			.dev		= "open0",
 			.flags		= O_WRONLY,
 			.open_nr	= 10,
+			.fork_nr	= 0,
 			.close_nr	= 10,
+			.want_nr	= 0,
 			.want		= 0,
 		},
 		{
-			.name		= "1 open(open1, O_WRONLY) and 1 close() call",
-			.dev		= "open1",
-			.flags		= O_WRONLY,
+			.name		= "1 open(open0, O_RDONLY) and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
 			.open_nr	= 1,
-			.close_nr	= 1,
+			.fork_nr	= 1,
+			.close_nr	= 0,
+			.want_nr	= 1,
 			.want		= 0,
 		},
 		{
-			.name		= "10 open(open1, O_WRONLY) and 10 close() calls",
-			.dev		= "open1",
-			.flags		= O_WRONLY,
+			.name		= "1 open(open0, O_RDONLY) and 10 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
+			.open_nr	= 1,
+			.fork_nr	= 10,
+			.close_nr	= 0,
+			.want_nr	= 1,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY), 1 close() and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
+			.open_nr	= 1,
+			.fork_nr	= 1,
+			.close_nr	= 1,
+			.want_nr	= 1,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY), 1 close() and 10 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
+			.open_nr	= 1,
+			.fork_nr	= 10,
+			.close_nr	= 1,
+			.want_nr	= 1,
+			.want		= 0,
+		},
+		{
+			.name		= "10 open(open0, O_RDONLY) and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
 			.open_nr	= 10,
+			.fork_nr	= 1,
+			.close_nr	= 0,
+			.want_nr	= 10,
+			.want		= 0,
+		},
+		{
+			.name		= "10 open(open0, O_RDONLY), 10 close() and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY,
+			.open_nr	= 10,
+			.fork_nr	= 1,
 			.close_nr	= 10,
+			.want_nr	= 10,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY|O_CLOEXEC) and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 1,
+			.fork_nr	= 1,
+			.close_nr	= 0,
+			.want_nr	= 1,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY|O_CLOEXEC) and 10 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 1,
+			.fork_nr	= 10,
+			.close_nr	= 0,
+			.want_nr	= 1,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY|O_CLOEXEC), 1 close() and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 1,
+			.fork_nr	= 1,
+			.close_nr	= 1,
+			.want_nr	= 0,
+			.want		= 0,
+		},
+		{
+			.name		= "1 open(open0, O_RDONLY|O_CLOEXEC), 1 close() and 10 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 1,
+			.fork_nr	= 10,
+			.close_nr	= 1,
+			.want_nr	= 0,
+			.want		= 0,
+		},
+		{
+			.name		= "10 open(open0, O_RDONLY|O_CLOEXEC) and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 10,
+			.fork_nr	= 1,
+			.close_nr	= 0,
+			.want_nr	= 10,
+			.want		= 0,
+		},
+		{
+			.name		= "10 open(open0, O_RDONLY|O_CLOEXEC), 10 close() and 1 fork() call",
+			.dev		= "open0",
+			.flags		= O_RDONLY|O_CLOEXEC,
+			.open_nr	= 10,
+			.fork_nr	= 1,
+			.close_nr	= 10,
+			.want_nr	= 0,
 			.want		= 0,
 		},
 		{.name = NULL}, /* sentry */
