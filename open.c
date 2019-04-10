@@ -6,6 +6,7 @@
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/atomic.h>
+#include <linux/sysfs.h>
 
 struct open_device {
 	atomic_t	open_nr;
@@ -14,12 +15,12 @@ struct open_device {
 };
 
 static struct open_driver {
-	const char		*const name;
 	dev_t			devt;
 	struct device_driver	base;
+	struct device_type	type;
 	struct open_device	devs[2];
 } open_driver = {
-	.name		= "open",
+	.base.name	= "open",
 	.base.owner	= THIS_MODULE,
 	.devs		= {
 		{.open_nr = ATOMIC_INIT(0)},
@@ -63,6 +64,26 @@ static const struct file_operations open_fops =  {
 	.release	= release,
 };
 
+static ssize_t open_nr_show(struct device *dev, struct device_attribute *attr,
+			    char *page)
+{
+	struct open_device *d = container_of(dev, struct open_device, base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&d->open_nr));
+}
+static DEVICE_ATTR_RO(open_nr);
+
+static struct attribute *open_attrs[] = {
+	&dev_attr_open_nr.attr,
+	NULL,
+};
+static const struct attribute_group open_attr_group = {
+	.attrs = open_attrs,
+};
+static const struct attribute_group *open_attr_groups[] = {
+	&open_attr_group,
+	NULL,
+};
+
 static int __init init(void)
 {
 	struct open_driver *drv = &open_driver;
@@ -71,19 +92,22 @@ static int __init init(void)
 	char init_name[12];
 	int err;
 
-	err = alloc_chrdev_region(&drv->devt, 0, nr, drv->name);
+	err = alloc_chrdev_region(&drv->devt, 0, nr, drv->base.name);
 	if (err)
 		return err;
 
+	drv->type.name= drv->base.name;
+	drv->type.groups = open_attr_groups;
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
-		err = snprintf(init_name, sizeof(init_name), "%s%d", drv->name, i);
+		err = snprintf(init_name, sizeof(init_name), "%s%d", drv->base.name, i);
 		if (!err) {
 			j = i;
 			goto err;
 		}
+		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		dev->base.init_name = init_name;
 		dev->base.driver = &drv->base;
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
+		dev->base.type = &drv->type;
 		device_initialize(&dev->base);
 		dev->cdev.owner = drv->base.owner;
 		cdev_init(&dev->cdev, &open_fops);
