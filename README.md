@@ -4,6 +4,13 @@
 
 [LDD] in action!
 
+## Drivers
+
+### Character drivers
+
+- [open.c](open.c): open(2) and close(2) example driver
+  - [open_test.c](tests/open_test.c): open.c unit test
+
 ## Build
 
 ```sh

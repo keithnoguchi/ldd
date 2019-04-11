@@ -18,6 +18,7 @@ static struct open_driver {
 	dev_t			devt;
 	struct device_driver	base;
 	struct device_type	type;
+	struct file_operations	fops;
 	struct open_device	devs[2];
 } open_driver = {
 	.base.name	= "open",
@@ -27,20 +28,6 @@ static struct open_driver {
 		{.open_nr = ATOMIC_INIT(0)},
 	},
 };
-
-static ssize_t read(struct file *fp, char __user *buf, size_t len, loff_t *pos)
-{
-	struct open_device *dev = fp->private_data;
-	printk("read(open_nr=%d)\n", atomic_read(&dev->open_nr));
-	return 0;
-}
-
-static ssize_t write(struct file *fp, const char __user *buf, size_t len, loff_t *pos)
-{
-	struct open_device *dev = fp->private_data;
-	printk("write(open_nr=%d)\n", atomic_read(&dev->open_nr));
-	return 0;
-}
 
 static int open(struct inode *ip, struct file *fp)
 {
@@ -56,13 +43,6 @@ static int release(struct inode *ip, struct file *fp)
 	atomic_dec(&dev->open_nr);
 	return 0;
 }
-
-static const struct file_operations open_fops =  {
-	.read		= read,
-	.write		= write,
-	.open		= open,
-	.release	= release,
-};
 
 static ssize_t open_nr_show(struct device *dev, struct device_attribute *attr,
 			    char *page)
@@ -84,6 +64,14 @@ static const struct attribute_group *open_attr_groups[] = {
 	NULL,
 };
 
+static void __init init_driver(struct open_driver *drv)
+{
+	drv->type.name		= drv->base.name;
+	drv->type.groups	= open_attr_groups;
+	drv->fops.open		= open;
+	drv->fops.release	= release;
+}
+
 static int __init init(void)
 {
 	struct open_driver *drv = &open_driver;
@@ -96,8 +84,7 @@ static int __init init(void)
 	if (err)
 		return err;
 
-	drv->type.name= drv->base.name;
-	drv->type.groups = open_attr_groups;
+	init_driver(drv);
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
 		err = snprintf(init_name, sizeof(init_name), "%s%d", drv->base.name, i);
 		if (!err) {
@@ -110,7 +97,7 @@ static int __init init(void)
 		dev->base.type = &drv->type;
 		device_initialize(&dev->base);
 		dev->cdev.owner = drv->base.owner;
-		cdev_init(&dev->cdev, &open_fops);
+		cdev_init(&dev->cdev, &drv->fops);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
