@@ -3,7 +3,7 @@ version: 2
 default: &defaults
   working_directory: /home/circleci/project/ldd
   docker:
-    - image: archlinux/base:latest
+    - image: keinohguchi/archlinux
 workflows:
   version: 2
   checkout_build_install:
@@ -19,10 +19,6 @@ jobs:
   checkout:
     <<: *defaults
     steps:
-      - run:
-          name: Install git/ssh and tar for the checkout/workspace creation
-          command: |
-            pacman -Sy --noconfirm git openssh tar
       - checkout
       - run:
           name: Install kernel source code and the build tools
@@ -49,18 +45,12 @@ jobs:
   build:
     <<: *defaults
     steps:
-      - run:
-          name: install tar to attach to the workspace
-          command: pacman -Sy --noconfirm tar
       - attach_workspace:
           at: /
       - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make
   install:
     <<: *defaults
     steps:
-      - run:
-          name: install tar to attach to the workspace
-          command: pacman -Sy --noconfirm tar sudo
       - attach_workspace:
           at: /
       - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build sudo -E make install
