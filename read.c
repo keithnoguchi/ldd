@@ -2,78 +2,60 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
-#include <linux/atomic.h>
-#include <linux/sysfs.h>
 
-struct open_device {
-	atomic_t	open_nr;
+struct read_device {
+	size_t		size;
 	struct cdev	cdev;
 	struct device	base;
 };
 
-static struct open_driver {
+static struct read_driver {
 	dev_t			devt;
-	struct device_driver	base;
-	struct device_type	type;
 	struct file_operations	fops;
-	struct open_device	devs[1000]; /* 1000 devices!? */
-} open_driver = {
-	.base.name	= "open",
+	struct device_driver	base;
+	struct read_device	devs[1000]; /* 1000 devices!? */
+} read_driver = {
+	.base.name	= "read",
 	.base.owner	= THIS_MODULE,
 };
 
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+{
+	struct read_device *dev = fp->private_data;
+	return 0;
+}
+
 static int open(struct inode *ip, struct file *fp)
 {
-	struct open_device *dev = container_of(ip->i_cdev, struct open_device, cdev);
+	struct read_device *dev = container_of(ip->cdev, struct read_device, cdev);
 	fp->private_data = dev;
-	atomic_inc(&dev->open_nr);
 	return 0;
 }
 
 static int release(struct inode *ip, struct file *fp)
 {
-	struct open_device *dev = fp->private_data;
+	struct read_device *dev = fp->private_data;
 	fp->private_data = NULL;
-	atomic_dec(&dev->open_nr);
 	return 0;
 }
 
-static ssize_t open_nr_show(struct device *dev, struct device_attribute *attr,
-			    char *page)
+static void __init init_driver(struct read_driver *drv)
 {
-	struct open_device *d = container_of(dev, struct open_device, base);
-	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&d->open_nr));
-}
-static DEVICE_ATTR_RO(open_nr);
-
-static struct attribute *open_attrs[] = {
-	&dev_attr_open_nr.attr,
-	NULL,
-};
-static const struct attribute_group open_attr_group = {
-	.attrs = open_attrs,
-};
-static const struct attribute_group *open_attr_groups[] = {
-	&open_attr_group,
-	NULL,
-};
-
-static void __init init_driver(struct open_driver *drv)
-{
-	drv->type.name		= drv->base.name;
-	drv->type.groups	= open_attr_groups;
+	drv->fops.read		= read;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 }
 
 static int __init init(void)
 {
-	struct open_driver *drv = &open_driver;
+	struct read_driver *drv = &read_driver;
 	int i, j, nr = ARRAY_SIZE(drv->devs);
-	struct open_device *dev;
+	struct read_device *dev;
 	char name[8]; /* for 1000 devices */
 	int err;
 
@@ -88,14 +70,12 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		dev->base.init_name = name;
 		dev->base.driver = &drv->base;
-		dev->base.type = &drv->type;
+		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		device_initialize(&dev->base);
-		dev->cdev.owner = drv->base.owner;
 		cdev_init(&dev->cdev, &drv->fops);
-		atomic_set(&dev->open_nr, 0);
+		dev->size = 0;
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
@@ -112,9 +92,9 @@ module_init(init);
 
 static void __exit term(void)
 {
-	struct open_driver *drv = &open_driver;
+	struct read_driver *drv = &read_driver;
 	int i, nr = ARRAY_SIZE(drv->devs);
-	struct open_device *dev;
+	struct read_device *dev;
 
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
@@ -124,4 +104,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("open(2) and close(2) example");
+MODULE_DESCRIPTION("read(2) example");

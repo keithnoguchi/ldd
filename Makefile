@@ -1,5 +1,6 @@
 # SPDX-License-Idenfitier: GPL-2.0
 MODS  := open
+MODS  += read
 MODS  += scull
 MODS  += sleepy
 MODS  += ldd
