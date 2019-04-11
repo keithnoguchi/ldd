@@ -53,4 +53,4 @@ jobs:
     steps:
       - attach_workspace:
           at: /
-      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build sudo -E make install
+      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make install
