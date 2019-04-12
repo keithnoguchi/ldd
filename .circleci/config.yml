@@ -21,26 +21,13 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kernel source code and the build tools
+          name: Install kernel source code
           command: |
-            pacman -S --noconfirm linux linux-headers gcc make grep
+            pacman -S --noconfirm linux linux-headers
       - persist_to_workspace:
           root: /
           paths:
             - lib/modules/
-            - usr/bin/as
-            - usr/bin/ld
-            - usr/bin/gcc
-            - usr/bin/make
-            - usr/bin/grep
-            - usr/lib/libopcodes-*
-            - usr/lib/libbfd-*
-            - usr/lib/libgc.so*
-            - usr/lib/libmpc.so*
-            - usr/lib/libmpfr.so*
-            - usr/lib/libltdl.so*
-            - usr/lib/libguile-2.2.so*
-            - usr/lib/gcc/x86_64-pc-linux-gnu
             - home/circleci/project/ldd
   build:
     <<: *defaults
