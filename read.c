@@ -2,6 +2,7 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/fs.h>
@@ -19,29 +20,36 @@ struct read_device {
 
 static struct read_driver {
 	dev_t			devt;
+	size_t			default_size;
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct read_device	devs[1000]; /* 1000 devices!? */
 } read_driver = {
 	.base.name	= "read",
 	.base.owner	= THIS_MODULE,
+	.default_size	= PAGE_SIZE,
 };
+module_param_named(default_size, read_driver.default_size, ulong, 0600);
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
-	return 0;
+	struct read_device *dev = fp->private_data;
+	int err;
+
+	err = mutex_lock_interruptible(&dev->lock);
+	if (err)
+		return -ERESTARTSYS;
+	if (*pos+count > dev->size)
+		count = dev->size-*pos;
+	mutex_unlock(&dev->lock);
+	*pos += count;
+	return count;
 }
 
 static int open(struct inode *ip, struct file *fp)
 {
 	struct read_device *dev = container_of(ip->i_cdev, struct read_device, cdev);
 	fp->private_data = dev;
-	return 0;
-}
-
-static int release(struct inode *ip, struct file *fp)
-{
-	fp->private_data = NULL;
 	return 0;
 }
 
@@ -74,13 +82,13 @@ static ssize_t size_store(struct device *base, struct device_attribute *attr,
 	mutex_unlock(&dev->lock);
 	return count;
 }
-DEVICE_ATTR_RW(size);
+static DEVICE_ATTR_RW(size);
 
-static void __init init_driver(struct read_driver *drv)
+static int __init init_driver(struct read_driver *drv)
 {
 	drv->fops.read		= read;
 	drv->fops.open		= open;
-	drv->fops.release	= release;
+	return 0;
 }
 
 static int __init init(void)
@@ -95,7 +103,9 @@ static int __init init(void)
 	if (err)
 		return err;
 
-	init_driver(drv);
+	err = init_driver(drv);
+	if (err)
+		return err;
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err <= 0) {
@@ -108,7 +118,7 @@ static int __init init(void)
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
-		dev->size = 0;
+		dev->size = drv->default_size;
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;

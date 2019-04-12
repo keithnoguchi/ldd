@@ -10,6 +10,8 @@
 
 - [open.c](open.c): open(2) and close(2) example driver
   - [open_test.c](tests/open_test.c): open.c unit test
+- [read.c](read.c): read(2) example driver
+  - [read_test.c](tests/read_test.c): read.c unit test
 
 ## Build
 

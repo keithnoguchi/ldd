@@ -36,7 +36,6 @@ static int open(struct inode *ip, struct file *fp)
 static int release(struct inode *ip, struct file *fp)
 {
 	struct open_device *dev = fp->private_data;
-	fp->private_data = NULL;
 	atomic_dec(&dev->open_nr);
 	return 0;
 }

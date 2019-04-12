@@ -21,7 +21,7 @@ unload:
 reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
-test: modules_install load run_tests
+test: modules_install reload run_tests
 run_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests \
 		CFLAGS="-I$(KDIR)/tools/testing/selftests -I$(shell pwd)" $@

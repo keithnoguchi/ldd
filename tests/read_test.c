@@ -14,25 +14,47 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
-	size_t		count;
+	size_t		total;
+	size_t		size;
 	int		want;
 };
 
 static void test(const struct test *restrict t)
 {
 	char buf[LINE_MAX];
-	int ret, fd;
+	int i, ret, fd;
+	FILE *fp;
 
+	ret = snprintf(buf, sizeof(buf), "/sys/devices/%s/size", t->dev);
+	if (ret < 0)
+		goto err;
+	fp = fopen(buf, "w");
+	if (fp == NULL)
+		goto err;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->total);
+	if (ret < 0)
+		goto err;
+	ret = fwrite(buf, strlen(buf), 1, fp);
+	if (ret != 1)
+		goto err;
+	ret = fclose(fp);
+	if (ret == -1)
+		goto err;
 	ret = snprintf(buf, sizeof(buf), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto err;
 	fd = open(buf, O_RDONLY);
 	if (fd == -1)
 		goto err;
-	while ((ret = read(fd, buf, t->count)) > 0)
+	for (i = 0; (ret = read(fd, buf, t->size)) > 0; i++)
 		;
 	if (ret == -1)
 		goto err;
+	if (i != t->want) {
+		fprintf(stderr, "%s: unexpected result:\n\t- want: %d\n\t-  got: %d\n",
+			t->name, t->want, i);
+		exit(EXIT_FAILURE);
+	}
 	exit(EXIT_SUCCESS);
 err:
 	fprintf(stderr, "%s: %s\n", t->name, strerror(errno));
@@ -43,84 +65,137 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
+			.name	= "read on read0(total 2) each 1 byte",
+			.dev	= "read0",
+			.total	= 2,
+			.size	= 1,
+			.want	= 2,
+		},
+		{
+			.name	= "read on read0(total 2) each 2 byte",
+			.dev	= "read0",
+			.total	= 2,
+			.size	= 2,
+			.want	= 1,
+		},
+		{
+			.name	= "read on read0(total 2) each 3 byte",
+			.dev	= "read0",
+			.total	= 2,
+			.size	= 3,
+			.want	= 1,
+		},
+		{
 			.name	= "read on read0 each 0 byte",
 			.dev	= "read0",
-			.count	= 0,
+			.total	= 4096,
+			.size	= 0,
+			.want	= 0,
 		},
 		{
 			.name	= "read on read0 each 1 byte",
 			.dev	= "read0",
-			.count	= 1,
+			.total	= 4096,
+			.size	= 1,
+			.want	= 4096,
 		},
 		{
 			.name	= "read on read0 each 2 bytes",
 			.dev	= "read0",
-			.count	= 2,
+			.total	= 4096,
+			.size	= 2,
+			.want	= 2048,
 		},
 		{
 			.name	= "read on read0 each 3 bytes",
 			.dev	= "read0",
-			.count	= 3,
+			.total	= 4096,
+			.size	= 3,
+			.want	= 1366,
 		},
 		{
 			.name	= "read on read0 each 15 bytes",
 			.dev	= "read0",
-			.count	= 15,
+			.total	= 4096,
+			.size	= 15,
+			.want	= 274,
 		},
 		{
 			.name	= "read on read0 each 16 bytes",
 			.dev	= "read0",
-			.count	= 16,
+			.total	= 4096,
+			.size	= 16,
+			.want	= 256,
 		},
 		{
 			.name	= "read on read0 each 17 bytes",
 			.dev	= "read0",
-			.count	= 17,
+			.total	= 4096,
+			.size	= 17,
+			.want	= 241,
 		},
 		{
 			.name	= "read on read0 each 31 bytes",
 			.dev	= "read0",
-			.count	= 15,
+			.total	= 4096,
+			.size	= 31,
+			.want	= 133,
 		},
 		{
 			.name	= "read on read0 each 32 bytes",
 			.dev	= "read0",
-			.count	= 16,
+			.total	= 4096,
+			.size	= 32,
+			.want	= 128,
 		},
 		{
 			.name	= "read on read0 each 33 bytes",
 			.dev	= "read0",
-			.count	= 17,
+			.total	= 4096,
+			.size	= 33,
+			.want	= 125,
 		},
 		{
 			.name	= "read on read0 each 4095 bytes",
 			.dev	= "read0",
-			.count	= 4095,
+			.total	= 4096,
+			.size	= 4095,
+			.want	= 2,
 		},
 		{
 			.name	= "read on read0 each 4096 bytes",
 			.dev	= "read0",
-			.count	= 4096,
+			.total	= 4096,
+			.size	= 4096,
+			.want	= 1,
 		},
 		{
 			.name	= "read on read0 each 4097 bytes",
 			.dev	= "read0",
-			.count	= 4097,
+			.total	= 4096,
+			.size	= 4097,
+			.want	= 1,
 		},
 		{
 			.name	= "read on read0 each 8191 bytes",
 			.dev	= "read0",
-			.count	= 8191,
+			.total	= 4096,
+			.size	= 8191,
+			.want	= 1,
 		},
 		{
 			.name	= "read on read0 each 8192 bytes",
 			.dev	= "read0",
-			.count	= 8192,
+			.total	= 4096,
+			.size	= 8192,
+			.want	= 1,
 		},
 		{
 			.name	= "read on read0 each 8193 bytes",
 			.dev	= "read0",
-			.count	= 8193,
+			.total	= 4096,
+			.size	= 8193,
+			.want	= 1,
 		},
 		{.name = NULL}, /* sentry */
 	};
