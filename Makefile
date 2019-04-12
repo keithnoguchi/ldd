@@ -11,12 +11,14 @@ all default: modules
 install: modules_install
 modules modules_install help:
 	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
+.PHONY: clean load unload reload
 clean: clean_tests
 	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 load:
-	for mod in $(MODS); do modprobe $$mod; done
+	@for mod in $(MODS); do insmod $${mod}.ko; done
 unload:
-	-for mod in $(MODS); do modprobe -r $$mod; done
+	-@for mod in $(MODS); do modprobe -r $$mod; done
+reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
 test: modules_install load run_tests
