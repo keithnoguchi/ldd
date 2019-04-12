@@ -84,11 +84,10 @@ static ssize_t size_store(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RW(size);
 
-static int __init init_driver(struct read_driver *drv)
+static void __init init_driver(struct read_driver *drv)
 {
-	drv->fops.read		= read;
-	drv->fops.open		= open;
-	return 0;
+	drv->fops.read	= read;
+	drv->fops.open	= open;
 }
 
 static int __init init(void)
@@ -103,15 +102,14 @@ static int __init init(void)
 	if (err)
 		return err;
 
-	err = init_driver(drv);
-	if (err)
-		return err;
+	init_driver(drv);
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err <= 0) {
 			j = i;
 			goto err;
 		}
+		memset(&dev->base, 0, sizeof(struct device));
 		dev->base.init_name = name;
 		dev->base.driver = &drv->base;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
@@ -136,6 +134,7 @@ err:
 		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
 	}
+	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
 module_init(init);

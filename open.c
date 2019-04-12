@@ -2,6 +2,8 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
+#include <linux/kernel.h>
+#include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
@@ -87,12 +89,12 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
+		memset(&dev->base, 0, sizeof(struct device));
 		dev->base.init_name = name;
 		dev->base.driver = &drv->base;
 		dev->base.type = &drv->type;
+		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		device_initialize(&dev->base);
-		dev->cdev.owner = drv->base.owner;
 		cdev_init(&dev->cdev, &drv->fops);
 		atomic_set(&dev->open_nr, 0);
 		err = cdev_device_add(&dev->cdev, &dev->base);
@@ -105,6 +107,7 @@ static int __init init(void)
 err:
 	for (i = 0, dev = drv->devs; i < j; i++, dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
+	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
 module_init(init);

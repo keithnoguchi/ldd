@@ -58,7 +58,7 @@ static void test(const struct test *const t)
 			goto fail;
 		} else if (pid == 0) {
 			/* 10 sleep */
-			const char *argv[] = {"sleep", "10", NULL};
+			char *const argv[] = {"sleep", "10", NULL};
 			ret = execvp(argv[0], argv);
 			if (ret == -1) {
 				fprintf(stderr, "%s: %s\n",
