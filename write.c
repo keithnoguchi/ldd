@@ -7,8 +7,11 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/sysfs.h>
+#include <linux/mutex.h>
 
 struct write_device {
+	struct mutex	lock;
 	size_t		size;
 	struct cdev	cdev;
 	struct device	base;
@@ -16,8 +19,8 @@ struct write_device {
 
 static struct write_driver {
 	dev_t			devt;
-	struct device_driver	base;
 	struct file_operations	fops;
+	struct device_driver	base;
 	struct write_device	devs[1000]; /* 1000 devices!? */
 } write_driver = {
 	.base.name	= "write",
@@ -26,6 +29,13 @@ static struct write_driver {
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
+	struct write_device *dev = fp->private_data;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (*pos+count > dev->size)
+		dev->size = *pos+count;
+	mutex_unlock(&dev->lock);
+	*pos += count;
 	return count;
 }
 
@@ -35,8 +45,26 @@ static int open(struct inode *ip, struct file *fp)
 	fp->private_data = dev;
 	if ((fp->f_flags&O_ACCMODE) == O_RDONLY)
 		return -EINVAL;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (fp->f_flags&O_TRUNC)
+		dev->size = 0;
+	mutex_unlock(&dev->lock);
 	return 0;
 }
+
+static ssize_t size_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct write_device *dev = container_of(base, struct write_device, base);
+	size_t size;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	size = dev->size;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", size);
+}
+static DEVICE_ATTR_RO(size);
 
 static void __init init_driver(struct write_driver *drv)
 {
@@ -69,16 +97,24 @@ static int __init init(void)
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
+		mutex_init(&dev->lock);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
 			goto err;
 		}
+		err = device_create_file(&dev->base, &dev_attr_size);
+		if (err) {
+			j = i+1;
+			goto err;
+		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
@@ -90,8 +126,10 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct write_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);

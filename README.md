@@ -6,12 +6,14 @@
 
 ## Drivers
 
-### Character drivers
+### Character device drivers
 
 - [open.c](open.c): open(2) and close(2) example driver
   - [open_test.c](tests/open_test.c): open.c unit test
 - [read.c](read.c): read(2) example driver
   - [read_test.c](tests/read_test.c): read.c unit test
+- [write.c](write.c): write(2) example driver
+  - [write_test.c](tests/write_test.c): write.c unit test
 
 ## Build
 

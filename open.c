@@ -18,9 +18,9 @@ struct open_device {
 
 static struct open_driver {
 	dev_t			devt;
-	struct device_driver	base;
-	struct device_type	type;
 	struct file_operations	fops;
+	struct device_type	type;
+	struct device_driver	base;
 	struct open_device	devs[1000]; /* 1000 devices!? */
 } open_driver = {
 	.base.name	= "open",
