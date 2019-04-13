@@ -2,6 +2,7 @@
 MODS  := open
 MODS  += read
 MODS  += write
+MODS  += readv
 MODS  += scull
 MODS  += sleepy
 MODS  += ldd

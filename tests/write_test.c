@@ -87,14 +87,14 @@ int main(void)
 		{
 			.name	= "open write only",
 			.dev	= "write0",
-			.flags	= O_WRONLY,
+			.flags	= O_WRONLY|O_TRUNC,
 			.total	= 0,
 			.want	= 0,
 		},
 		{
 			.name	= "open read-write",
 			.dev	= "write0",
-			.flags	= O_RDWR,
+			.flags	= O_RDWR|O_TRUNC,
 			.total	= 0,
 			.want	= 0,
 		},
