@@ -14,6 +14,8 @@
   - [read_test.c](tests/read_test.c): read.c unit test
 - [write.c](write.c): write(2) example driver
   - [write_test.c](tests/write_test.c): write.c unit test
+- [readv.c](readv.c): readv(2) example driver
+  - [readv_test.c](tests/readv_test.c): readv.c unit test
 
 ## Build
 

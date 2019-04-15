@@ -28,7 +28,6 @@ reload: unload load
 .PHONY: test run_tests clean_tests
 test: modules reload run_tests
 run_tests:
-	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests \
-		CFLAGS=-I$(KDIR)/tools/testing/selftests $@
+	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
