@@ -1,4 +1,4 @@
-# Linux Device Driver in Action
+# Linux Device Drivers in Action
 
 [![CircleCI]](https://circleci.com/gh/keinohguchi/workflows/ldd)
 

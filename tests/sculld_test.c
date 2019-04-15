@@ -28,7 +28,7 @@ static int test_not_opendir(const char *path)
 	return EEXIST;
 }
 
-static int test_open_file_read_only(const char *path)
+int test_open_file_read_only(const char *path)
 {
 	int fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -37,7 +37,7 @@ static int test_open_file_read_only(const char *path)
 	return 0;
 }
 
-static int test_open_file_write_only(const char *path)
+int test_open_file_write_only(const char *path)
 {
 	int fd = open(path, O_WRONLY);
 	if (fd == -1)
@@ -46,7 +46,7 @@ static int test_open_file_write_only(const char *path)
 	return 0;
 }
 
-static int test_open_file_read_write(const char *path)
+int test_open_file_read_write(const char *path)
 {
 	int fd = open(path, O_RDWR);
 	if (fd == -1)
@@ -55,7 +55,7 @@ static int test_open_file_read_write(const char *path)
 	return 0;
 }
 
-static int test_no_open_file_read_only(const char *path)
+int test_no_open_file_read_only(const char *path)
 {
 	int fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -64,7 +64,7 @@ static int test_no_open_file_read_only(const char *path)
 	return ENODEV;
 }
 
-static int test_no_open_file_write_only(const char *path)
+int test_no_open_file_write_only(const char *path)
 {
 	int fd = open(path, O_WRONLY);
 	if (fd == -1)
@@ -114,7 +114,7 @@ out:
 	return err;
 }
 
-static int test_readn(const char *path, size_t len, int n)
+int test_readn(const char *path, size_t len, int n)
 {
 	char *buf = NULL;
 	int err = 0;
@@ -130,7 +130,7 @@ static int test_readn(const char *path, size_t len, int n)
 
 	buf = malloc(len);
 	if (!buf) {
-		int err = errno;
+		err = errno;
 		goto out;
 	}
 
@@ -139,10 +139,10 @@ static int test_readn(const char *path, size_t len, int n)
 		while (pos < len) {
 			ssize_t ret = read(fd, buf+pos, len-pos);
 			if (ret == -1) {
-				int err = errno;
+				err = errno;
 				goto out;
 			}
-			printf("%ld = read(%s:%d)\n", ret, path, len-pos);
+			printf("%ld = read(%s:%ld)\n", ret, path, len-pos);
 			pos += ret;
 		}
 	}

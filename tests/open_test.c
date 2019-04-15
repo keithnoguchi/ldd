@@ -99,7 +99,7 @@ static void test(const struct test *const t)
 		goto fail;
 	}
 	if (val != t->want_nr) {
-		fprintf(stderr, "%s: unexpected open_nr value:\n\t- want: %d\n\t-  got: %d\n",
+		fprintf(stderr, "%s: unexpected open_nr value:\n\t- want: %d\n\t-  got: %ld\n",
 			t->name, t->want_nr, val);
 		goto fail;
 	}

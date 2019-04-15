@@ -9,6 +9,7 @@ MODS  += sleepy
 MODS  += ldd
 MODS  += sculld
 obj-m += $(patsubst %,%.o,$(MODS))
+TESTS := $(patsubst %,%_test,$(MODS))
 KDIR  ?= /lib/modules/$(shell uname -r)/build
 all default: modules
 install: modules_install
@@ -31,3 +32,5 @@ run_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
+$(TESTS): modules reload
+	$(MAKE) -C tests $@

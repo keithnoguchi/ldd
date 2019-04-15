@@ -401,6 +401,7 @@ static int test_scull_readn(void)
 			fail++;
 			continue;
 		}
+		total = 0;
 		err = test_readn(path, t->len, t->count, t->offset, &total);
 		if (err) {
 			errno = err;
@@ -561,7 +562,7 @@ static int test_scull_writen(void)
 			continue;
 		}
 		bufsize = 0;
-		if (t->len*t->count) {
+		if ((t->len*t->count) != 0) {
 			bufsize = ((t->len*t->count)/quantum)*quantum;
 			if ((t->len*t->count)%quantum)
 				bufsize += quantum;

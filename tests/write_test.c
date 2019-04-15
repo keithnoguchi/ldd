@@ -192,7 +192,7 @@ int main(void)
 		}
 		if (WIFSIGNALED(status)) {
 			fprintf(stderr, "%s: signaled with %s\n",
-				t->name, WTERMSIG(status));
+				t->name, strsignal(WTERMSIG(status)));
 			goto err;
 		}
 		if (!WIFEXITED(status)) {
