@@ -10,6 +10,7 @@
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/mutex.h>
+#include <asm/page.h>
 
 struct read_device {
 	struct mutex	lock;
@@ -29,7 +30,7 @@ static struct read_driver {
 	.base.owner	= THIS_MODULE,
 	.default_size	= PAGE_SIZE,
 };
-module_param_named(default_size, read_driver.default_size, ulong, 0600);
+module_param_named(default_size, read_driver.default_size, ulong, 0444);
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {

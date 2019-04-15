@@ -5,6 +5,7 @@ MODS  += write
 MODS  += readv
 MODS  += scull
 MODS  += sleepy
+# ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
 obj-m += $(patsubst %,%.o,$(MODS))
@@ -19,7 +20,9 @@ clean: clean_tests
 load:
 	@for mod in $(MODS); do insmod ./$${mod}.ko; done
 unload:
-	@-for mod in $(MODS); do modprobe -r $$mod; done
+	@# remove ldd.ko last
+	@-for mod in $(filter-out ldd,$(MODS)); do rmmod ./$$mod.ko; done
+	@-rmmod ./ldd.ko
 reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
