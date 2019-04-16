@@ -3,6 +3,7 @@ MODS  := open
 MODS  += read
 MODS  += write
 MODS  += readv
+MODS  += writev
 MODS  += scull
 MODS  += sleepy
 # ldd bus based drivers
