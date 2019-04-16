@@ -7,8 +7,11 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/mutex.h>
 
 struct scull_device {
+	struct mutex	lock;
+	size_t		size;
 	struct cdev	cdev;
 	struct device	base;
 };
@@ -29,6 +32,20 @@ static int open(struct inode *ip, struct file *fp)
 	fp->private_data = dev;
 	return 0;
 }
+
+static ssize_t size_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct scull_device *dev = container_of(base, struct scull_device, base);
+	size_t size;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	size = dev->size;
+	mutex_unlock(&dev->lock);
+	return size;
+}
+static DEVICE_ATTR_RO(size);
 
 static void __init init_driver(struct scull_driver *drv)
 {
@@ -60,16 +77,25 @@ static int __init init(void)
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
+		mutex_init(&dev->lock);
+		dev->size = 0;
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
 			goto err;
 		}
+		err = device_create_file(&dev->base, &dev_attr_size);
+		if (err) {
+			j = i+1;
+			goto err;
+		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
@@ -81,8 +107,10 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct scull_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);
