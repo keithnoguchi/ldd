@@ -8,6 +8,7 @@
 #include <linux/fcntl.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
+#include <linux/uio.h>
 
 struct writev_device {
 	struct mutex	lock;
@@ -26,6 +27,18 @@ static struct writev_driver {
 	.base.owner	= THIS_MODULE,
 };
 
+static ssize_t write_iter(struct kiocb *cb, struct iov_iter *iter)
+{
+	struct writev_device *dev = cb->ki_filp->private_data;
+	if (!iter_is_iovec(iter))
+		return -EINVAL;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	dev->size = iter->count;
+	mutex_unlock(&dev->lock);
+	return iter->count;
+}
+
 static int open(struct inode *ip, struct file *fp)
 {
 	struct writev_device *dev = container_of(ip->i_cdev, struct writev_device, cdev);
@@ -43,10 +56,25 @@ out:
 	return 0;
 }
 
+static ssize_t size_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct writev_device *dev = container_of(base, struct writev_device, base);
+	ssize_t size;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	size = dev->size;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", size);
+}
+static DEVICE_ATTR_RO(size);
+
 static void __init init_driver(struct writev_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
-	drv->fops.open	= open;
+	drv->fops.write_iter	= write_iter;
+	drv->fops.open		= open;
 }
 
 static int __init init(void)
@@ -80,11 +108,18 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
+		err = device_create_file(&dev->base, &dev_attr_size);
+		if (err) {
+			j = i+1;
+			goto err;
+		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
@@ -96,8 +131,10 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct writev_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);

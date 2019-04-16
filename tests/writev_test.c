@@ -9,6 +9,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/uio.h>
 #include "kselftest.h"
 
 struct test {
@@ -16,14 +17,21 @@ struct test {
 	const char	*const dev;
 	int		flags;
 	int		err;
+	struct iovec	iov[6];
+	size_t		iovcnt;
+	size_t		total;
+	size_t		each;
+	size_t		want;
 };
 
 static void test(const struct test *restrict t)
 {
 	char buf[PATH_MAX];
 	int fd, ret;
+	FILE *fp;
+	long val;
 
-	ret = snprintf(buf, sizeof(buf)-1, "/dev/%s", t->dev);
+	ret = snprintf(buf, sizeof(buf), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto err;
 	fd = open(buf, t->flags);
@@ -31,6 +39,29 @@ static void test(const struct test *restrict t)
 		goto err;
 	if (t->err) {
 		fprintf(stderr, "%s: unexpected success\n", t->name);
+		exit(EXIT_FAILURE);
+	}
+	ret = writev(fd, t->iov, t->iovcnt);
+	if (ret == -1)
+		goto err;
+	ret = snprintf(buf, sizeof(buf), "/sys/devices/%s/size", t->dev);
+	if (ret < 0)
+		goto err;
+	fp = fopen(buf, "r");
+	if (fp == NULL)
+		goto err;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto err;
+	val = strtol(buf, NULL, 10);
+	if (val < 0 || val > LONG_MAX) {
+		fprintf(stderr, "%s: wrong file size (%ld)\n",
+			t->name, val);
+		exit(EXIT_FAILURE);
+	}
+	if (val != t->want) {
+		fprintf(stderr, "%s: unexpected file size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->want, val);
 		exit(EXIT_FAILURE);
 	}
 	exit(EXIT_SUCCESS);
@@ -43,6 +74,7 @@ err:
 
 int main(void)
 {
+	char buf[4][4096];
 	const struct test *t, tests[] = {
 		{
 			.name	= "open writev0 read-only",
@@ -51,19 +83,28 @@ int main(void)
 			.err	= EINVAL,
 		},
 		{
-			.name	= "open writev1 write-only",
+			.name	= "open writev1 write-only and 1 1024 buf",
 			.dev	= "writev1",
 			.flags	= O_WRONLY,
+			.iov	= {{buf[0],1024}},
+			.iovcnt	= 1,
+			.want	= 1024,
 		},
 		{
-			.name	= "open writev2 read-write",
+			.name	= "open writev2 read-write with 1 1024 buf",
 			.dev	= "writev2",
 			.flags	= O_RDWR,
+			.iov	= {{buf[0],1024}},
+			.iovcnt	= 1,
+			.want	= 1024,
 		},
 		{
-			.name	= "open writev3 write-only with truncation",
+			.name	= "open writev3 write-only with truncation, 1 1024 buf",
 			.dev	= "writev3",
 			.flags	= O_WRONLY|O_TRUNC,
+			.iov	= {{buf[0],1024}},
+			.iovcnt	= 1,
+			.want	= 1024,
 		},
 		{.name = NULL}, /* sentry */
 	};
