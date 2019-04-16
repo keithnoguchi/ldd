@@ -30,13 +30,25 @@ static struct writev_driver {
 static ssize_t write_iter(struct kiocb *cb, struct iov_iter *iter)
 {
 	struct writev_device *dev = cb->ki_filp->private_data;
+	const struct iovec *iov;
+	size_t offset;
+	ssize_t total;
+	int i;
+
 	if (!iter_is_iovec(iter))
 		return -EINVAL;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	dev->size = iter->count;
+	offset = iter->iov_offset;
+	total = 0;
+	for (i = 0, iov = iter->iov; i < iter->nr_segs; i++, iov++) {
+		total += iov->iov_len;
+		offset += iov->iov_len;
+		if (offset > dev->size)
+			dev->size = offset;
+	}
 	mutex_unlock(&dev->lock);
-	return iter->count;
+	return total;
 }
 
 static int open(struct inode *ip, struct file *fp)

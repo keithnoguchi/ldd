@@ -106,6 +106,46 @@ int main(void)
 			.iovcnt	= 1,
 			.want	= 1024,
 		},
+		{
+			.name	= "open writev0 write-only with truncation, 2 1024 bufs",
+			.dev	= "writev0",
+			.flags	= O_WRONLY|O_TRUNC,
+			.iov	= {{buf[0],1024},{buf[1],1024}},
+			.iovcnt	= 2,
+			.want	= 2048,
+		},
+		{
+			.name	= "open writev1 write-only with truncation, 3 1024 bufs",
+			.dev	= "writev1",
+			.flags	= O_WRONLY|O_TRUNC,
+			.iov	= {{buf[0],1024},{buf[1],1024},{buf[2],1024}},
+			.iovcnt	= 3,
+			.want	= 3072,
+		},
+		{
+			.name	= "open writev2 write-only with truncation, 4 4096 bufs",
+			.dev	= "writev2",
+			.flags	= O_WRONLY|O_TRUNC,
+			.iov	= {{buf[0],4096},{buf[1],4096},{buf[2],4096},{buf[3],4096}},
+			.iovcnt	= 4,
+			.want	= 16384,
+		},
+		{
+			.name	= "open writev3 write-only with truncation, 1,1024,2048,4096 bufs",
+			.dev	= "writev3",
+			.flags	= O_WRONLY|O_TRUNC,
+			.iov	= {{buf[0],1},{buf[1],1024},{buf[2],2048},{buf[3],4096}},
+			.iovcnt	= 4,
+			.want	= 7169,
+		},
+		{
+			.name	= "open writev3 write-only continuation, 1,1024,2048,4095 bufs",
+			.dev	= "writev3",
+			.flags	= O_WRONLY,
+			.iov	= {{buf[0],1},{buf[1],1024},{buf[2],2048},{buf[3],4095}},
+			.iovcnt	= 4,
+			.want	= 7169,
+		},
 		{.name = NULL}, /* sentry */
 	};
 
