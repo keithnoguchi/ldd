@@ -20,8 +20,10 @@ modules modules_install help:
 clean: clean_tests
 	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 load:
+	$(info loading modules...)
 	@for mod in $(MODS); do insmod ./$${mod}.ko; done
 unload:
+	$(info unloading modules...)
 	@# remove ldd.ko last
 	@-for mod in $(filter-out ldd,$(MODS)); do rmmod ./$$mod.ko; done
 	@-rmmod ./ldd.ko

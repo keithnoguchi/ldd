@@ -110,14 +110,13 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-		memset(&dev->base, 0, sizeof(struct device));
-		dev->base.init_name = name;
-		dev->base.driver = &drv->base;
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
-		device_initialize(&dev->base);
-		cdev_init(&dev->cdev, &drv->fops);
-		mutex_init(&dev->lock);
+		memset(dev, 0, sizeof(struct read_device));
 		dev->size = drv->default_size;
+		mutex_init(&dev->lock);
+		cdev_init(&dev->cdev, &drv->fops);
+		device_initialize(&dev->base);
+		dev->base.init_name = name;
+		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;

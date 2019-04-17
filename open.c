@@ -89,14 +89,13 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-		memset(&dev->base, 0, sizeof(struct device));
+		memset(dev, 0, sizeof(struct open_device));
+		atomic_set(&dev->open_nr, 0);
+		cdev_init(&dev->cdev, &drv->fops);
+		device_initialize(&dev->base);
 		dev->base.init_name = name;
-		dev->base.driver = &drv->base;
 		dev->base.type = &drv->type;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
-		device_initialize(&dev->base);
-		cdev_init(&dev->cdev, &drv->fops);
-		atomic_set(&dev->open_nr, 0);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
