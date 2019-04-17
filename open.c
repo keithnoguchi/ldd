@@ -19,7 +19,6 @@ struct open_device {
 static struct open_driver {
 	dev_t			devt;
 	struct file_operations	fops;
-	struct device_type	type;
 	struct device_driver	base;
 	struct open_device	devs[1000]; /* 1000 devices!? */
 } open_driver = {
@@ -50,22 +49,8 @@ static ssize_t open_nr_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(open_nr);
 
-static struct attribute *open_attrs[] = {
-	&dev_attr_open_nr.attr,
-	NULL,
-};
-static const struct attribute_group open_attr_group = {
-	.attrs = open_attrs,
-};
-static const struct attribute_group *open_attr_groups[] = {
-	&open_attr_group,
-	NULL,
-};
-
 static void __init init_driver(struct open_driver *drv)
 {
-	drv->type.name		= drv->base.name;
-	drv->type.groups	= open_attr_groups;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 }
@@ -94,18 +79,24 @@ static int __init init(void)
 		cdev_init(&dev->cdev, &drv->fops);
 		device_initialize(&dev->base);
 		dev->base.init_name = name;
-		dev->base.type = &drv->type;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
 			goto err;
 		}
+		err = device_create_file(&dev->base, &dev_attr_open_nr);
+		if (err) {
+			j = i+1;
+			goto err;
+		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_open_nr);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
@@ -117,8 +108,10 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct open_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+		device_remove_file(&dev->base, &dev_attr_open_nr);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);
