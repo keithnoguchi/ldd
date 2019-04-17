@@ -8,7 +8,31 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include "kselftest.h"
+
+struct test {
+	const char	*const name;
+	const char	*const dev;
+	int		flags;
+};
+
+static void test(const struct test *restrict t)
+{
+	char buf[PATH_MAX];
+	int ret, fd;
+
+	ret = snprintf(buf, sizeof(buf), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+	fd = open(buf, t->flags);
+	if (fd == -1)
+		goto perr;
+	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
+}
 
 static int test_open(const char *path, int flags)
 {
@@ -249,44 +273,7 @@ out:
 	return ret;
 }
 
-static void test_scull_open(void)
-{
-	const struct test {
-		const char	*const name;
-		const char	*const path;
-		int		flags;
-	} *t, tests[] = {
-		{
-			.name	= "scull0 read only open",
-			.path	= "/dev/scull0",
-			.flags	= O_RDONLY,
-		},
-		{
-			.name	= "scull0 write only open",
-			.path	= "/dev/scull0",
-			.flags	= O_WRONLY,
-		},
-		{
-			.name	= "scull0 read/write open",
-			.path	= "/dev/scull0",
-			.flags	= O_RDWR,
-		},
-		{}, /* sentory */
-	};
-
-	for (t = tests; t->name; t++) {
-		int err = test_open(t->path, t->flags);
-		if (err) {
-			errno = err;
-			perror(t->name);
-			ksft_inc_fail_cnt();
-			continue;
-		}
-		ksft_inc_pass_cnt();
-	}
-}
-
-static void test_scull_attr_readl(void)
+void test_scull_attr_readl(void)
 {
 	const struct test {
 		const char	*name;
@@ -333,7 +320,7 @@ static void test_scull_attr_readl(void)
 	}
 }
 
-static void test_scull_readn(void)
+void test_scull_readn(void)
 {
 	const struct test {
 		const char	*name;
@@ -414,7 +401,7 @@ static void test_scull_readn(void)
 	}
 }
 
-static void test_scull_writen(void)
+void test_scull_writen(void)
 {
 	const struct test {
 		const char	*name;
@@ -553,7 +540,7 @@ static void test_scull_writen(void)
 	}
 }
 
-static void test_scull_writen_and_readn(void)
+void test_scull_writen_and_readn(void)
 {
 	const struct test {
 		const char	*name;
@@ -629,11 +616,62 @@ static void test_scull_writen_and_readn(void)
 
 int main(void)
 {
-	test_scull_open();
+	const struct test *t, tests[] = {
+		{
+			.name	= "scull0 read only open",
+			.dev	= "scull0",
+			.flags	= O_RDONLY,
+		},
+		{
+			.name	= "scull1 write only open",
+			.dev	= "scull1",
+			.flags	= O_WRONLY,
+		},
+		{
+			.name	= "scull2 read/write open",
+			.dev	= "scull2",
+			.flags	= O_RDWR,
+		},
+		{.name = NULL}, /* sentry */
+	};
+
+	for (t = tests; t->name; t++) {
+		int ret, status;
+		pid_t pid;
+
+		pid = fork();
+		if (pid == -1)
+			goto perr;
+		else if (pid == 0)
+			test(t);
+		ret = waitpid(pid, &status, 0);
+		if (ret == -1)
+			goto perr;
+		if (WIFSIGNALED(status)) {
+			fprintf(stderr, "%s: signaled with %s\n",
+				t->name, strsignal(WTERMSIG(status)));
+			goto err;
+		}
+		if (!WIFEXITED(status)) {
+			fprintf(stderr, "%s: does not exit\n",
+				t->name);
+			goto err;
+		}
+		if (WEXITSTATUS(status))
+			goto err;
+		ksft_inc_pass_cnt();
+		continue;
+perr:
+		perror(t->name);
+err:
+		ksft_inc_fail_cnt();
+	}
+#if 0
 	test_scull_attr_readl();
 	test_scull_readn();
 	test_scull_writen();
 	test_scull_writen_and_readn();
+#endif
 	if (ksft_get_fail_cnt())
 		ksft_exit_fail();
 	ksft_exit_pass();
