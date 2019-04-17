@@ -2,8 +2,8 @@
 version: 2
 default: &defaults
   working_directory: /home/circleci/project/ldd
-  machine:
-    image: circleci/classic:edge
+  docker:
+    - image: keinohguchi/archlinux
 workflows:
   version: 2
   checkout_build_install:
@@ -21,25 +21,23 @@ jobs:
     steps:
       - checkout
       - run:
-          name: Install kernel source
-          command: sudo apt install -y linux-headers-$(uname -r)
+          name: Install kernel source code
+          command: |
+            pacman -S --noconfirm linux linux-headers
       - persist_to_workspace:
           root: /
           paths:
-            - usr/src/linux-headers-$(uname -r)
+            - lib/modules/
             - home/circleci/project/ldd
   build:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run: KDIR=/usr/src/linux-headers-$(uname -r) make
+      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make
   install:
     <<: *defaults
     steps:
       - attach_workspace:
           at: /
-      - run:
-          name: Install kernel source code
-          command: sudo apt install -y linux-headers-$(uname -r)
-      - run: KDIR=/usr/src/linux-headers-$(uname -r) sudo -E make install
+      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make install
