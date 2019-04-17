@@ -9,22 +9,60 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 
+struct scull_qset {
+	struct scull_qset	*next;
+	void			**data;
+};
+
 struct scull_device {
-	struct mutex	lock;
-	size_t		size;
-	struct cdev	cdev;
-	struct device	base;
+	struct mutex		lock;
+	struct scull_qset	*data;
+	size_t			size;
+	struct cdev		cdev;
+	struct device		base;
 };
 
 static struct scull_driver {
 	dev_t			devt;
+	size_t			default_qset;
+	size_t			default_quantum;
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct scull_device	devs[4];
 } scull_driver = {
-	.base.name	= "scull",
-	.base.owner	= THIS_MODULE,
+	.default_qset		= 1024,
+	.default_quantum	= PAGE_SIZE,
+	.base.name		= "scull",
+	.base.owner		= THIS_MODULE,
 };
+
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+{
+	struct scull_device *dev = fp->private_data;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (*pos+count > dev->size)
+		count = dev->size-*pos;
+	mutex_unlock(&dev->lock);
+	if (count < 0)
+		count = 0;
+	*pos += count;
+	return count;
+}
+
+static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
+{
+	struct scull_device *dev = fp->private_data;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (dev->size > *pos+count)
+		dev->size = *pos+count;
+	mutex_unlock(&dev->lock);
+	*pos += count;
+	return count;
+}
 
 static int open(struct inode *ip, struct file *fp)
 {
@@ -50,6 +88,8 @@ static DEVICE_ATTR_RO(size);
 static void __init init_driver(struct scull_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.read	= read;
+	drv->fops.write	= write;
 	drv->fops.open	= open;
 }
 

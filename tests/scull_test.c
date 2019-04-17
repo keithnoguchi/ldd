@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
 #include "kselftest.h"
 
 static int test_open(const char *path, int flags)
@@ -24,19 +23,17 @@ static int test_attr_getl(const char *path, long *get)
 {
 	char buf[BUFSIZ];
 	int err = 0;
+	FILE *fp;
 	long got;
-	int fd;
 
-	fd = open(path, O_RDONLY);
-	if (fd == -1)
+	fp = fopen(path, "r");
+	if (fp == NULL)
 		return errno;
-
-	err = read(fd, buf, sizeof(buf));
-	if (err == -1) {
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp)) {
 		err = errno;
 		goto out;
 	}
-
 	got = strtol(buf, NULL, 10);
 	if (got <= LONG_MIN || got >= LONG_MAX) {
 		err = EINVAL;
@@ -45,7 +42,7 @@ static int test_attr_getl(const char *path, long *get)
 	err = 0;
 	*get = got;
 out:
-	close(fd);
+	fclose(fp);
 	return err;
 }
 
@@ -252,7 +249,7 @@ out:
 	return ret;
 }
 
-static int test_scull_open(void)
+static void test_scull_open(void)
 {
 	const struct test {
 		const char	*const name;
@@ -276,7 +273,6 @@ static int test_scull_open(void)
 		},
 		{}, /* sentory */
 	};
-	int fail = 0;
 
 	for (t = tests; t->name; t++) {
 		int err = test_open(t->path, t->flags);
@@ -284,21 +280,19 @@ static int test_scull_open(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		ksft_inc_pass_cnt();
 	}
-	return fail;
 }
 
-static int test_scull_attr_readl(void)
+static void test_scull_attr_readl(void)
 {
 	const struct test {
 		const char	*name;
 		const char	*path;
 		long		want;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "read scull0's pagesize",
 			.path	= "/sys/devices/scull0/pagesize",
@@ -326,8 +320,6 @@ static int test_scull_attr_readl(void)
 		},
 		{},	/* sentry */
 	};
-	const struct test *t;
-	int fail = 0;
 
 	for (t = tests; t->name; t++) {
 		int err = test_attr_readl(t->path, t->want);
@@ -339,10 +331,9 @@ static int test_scull_attr_readl(void)
 		}
 		ksft_inc_pass_cnt();
 	}
-	return fail;
 }
 
-static int test_scull_readn(void)
+static void test_scull_readn(void)
 {
 	const struct test {
 		const char	*name;
@@ -350,7 +341,7 @@ static int test_scull_readn(void)
 		size_t		len;
 		int		count;
 		off_t		offset;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "read 0 byte from scull0",
 			.dev	= "scull0",
@@ -388,9 +379,7 @@ static int test_scull_readn(void)
 		},
 		{}, /* sentry */
 	};
-	const struct test *t;
 	char path[BUFSIZ];
-	int fail = 0;
 	size_t total;
 
 	for (t = tests; t->name; t++) {
@@ -398,7 +387,6 @@ static int test_scull_readn(void)
 		if (err == -1) {
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		total = 0;
@@ -407,14 +395,12 @@ static int test_scull_readn(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = sprintf(path, "/sys/devices/%s/size", t->dev);
 		if (err == -1) {
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = test_attr_readl(path, total);
@@ -422,15 +408,13 @@ static int test_scull_readn(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		ksft_inc_pass_cnt();
 	}
-	return fail;
 }
 
-static int test_scull_writen(void)
+static void test_scull_writen(void)
 {
 	const struct test {
 		const char	*name;
@@ -438,7 +422,7 @@ static int test_scull_writen(void)
 		size_t		len;
 		int		count;
 		off_t		offset;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "write 0 byte on scull0",
 			.dev	= "scull0",
@@ -497,8 +481,6 @@ static int test_scull_writen(void)
 		},
 		{},	/* sentry */
 	};
-	const struct test *t;
-	int fail = 0;
 
 	for (t = tests; t->name; t++) {
 		char path[BUFSIZ];
@@ -510,7 +492,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = test_writen(path, t->len, t->count, t->offset);
@@ -518,7 +499,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = sprintf(path, "/sys/devices/%s/size", t->dev);
@@ -526,7 +506,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = test_attr_readl(path, t->len*t->count+t->offset);
@@ -534,7 +513,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = sprintf(path, "/sys/devices/%s/quantum", t->dev);
@@ -542,7 +520,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = test_attr_getl(path, &quantum);
@@ -550,7 +527,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = sprintf(path, "/sys/devices/%s/buffer/size", t->dev);
@@ -558,7 +534,6 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		bufsize = 0;
@@ -572,22 +547,20 @@ static int test_scull_writen(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		ksft_inc_pass_cnt();
 	}
-	return fail;
 }
 
-static int test_scull_writen_and_readn(void)
+static void test_scull_writen_and_readn(void)
 {
 	const struct test {
 		const char	*name;
 		const char	*dev;
 		size_t		len;
 		int		count;
-	} tests[] = {
+	} *t, tests[] = {
 		{
 			.name	= "write and read 0 bytes on scull0",
 			.dev	= "scull0",
@@ -632,8 +605,6 @@ static int test_scull_writen_and_readn(void)
 		},
 		{},	/* sentry */
 	};
-	const struct test *t;
-	int fail = 0;
 
 	for (t = tests; t->name; t++) {
 		char path[BUFSIZ];
@@ -643,7 +614,6 @@ static int test_scull_writen_and_readn(void)
 		if (err == -1) {
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		err = test_writen_and_readn(path, t->len, t->count);
@@ -651,24 +621,20 @@ static int test_scull_writen_and_readn(void)
 			errno = err;
 			perror(t->name);
 			ksft_inc_fail_cnt();
-			fail++;
 			continue;
 		}
 		ksft_inc_pass_cnt();
 	}
-	return fail;
 }
 
 int main(void)
 {
-	int fail;
-
-	fail = test_scull_open();
-	fail += test_scull_attr_readl();
-	fail += test_scull_readn();
-	fail += test_scull_writen();
-	fail += test_scull_writen_and_readn();
-	if (fail)
+	test_scull_open();
+	test_scull_attr_readl();
+	test_scull_readn();
+	test_scull_writen();
+	test_scull_writen_and_readn();
+	if (ksft_get_fail_cnt())
 		ksft_exit_fail();
 	ksft_exit_pass();
 }
