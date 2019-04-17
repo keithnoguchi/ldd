@@ -15,22 +15,58 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	int		flags;
+	size_t		quantum;
+	size_t		size;
 };
 
 static void test(const struct test *restrict t)
 {
-	char buf[PATH_MAX];
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
 	int ret, fd;
+	FILE *fp;
+	long got;
 
-	ret = snprintf(buf, sizeof(buf), "/dev/%s", t->dev);
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/quantum", t->dev);
 	if (ret < 0)
 		goto perr;
-	fd = open(buf, t->flags);
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->quantum) {
+		fprintf(stderr, "%s: unexpected quantum size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->quantum, got);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+	fd = open(path, t->flags);
 	if (fd == -1)
 		goto perr;
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/size", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->size) {
+		fprintf(stderr, "%s: unexpected size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->size, got);
+		goto err;
+	}
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
+err:
 	exit(EXIT_FAILURE);
 }
 
@@ -281,24 +317,9 @@ void test_scull_attr_readl(void)
 		long		want;
 	} *t, tests[] = {
 		{
-			.name	= "read scull0's pagesize",
-			.path	= "/sys/devices/scull0/pagesize",
-			.want	= 4096,
-		},
-		{
 			.name	= "read scull0's quantum set size",
 			.path	= "/sys/devices/scull0/quantum_set",
 			.want	= 1024,
-		},
-		{
-			.name	= "read scull0's quantum size",
-			.path	= "/sys/devices/scull0/quantum",
-			.want	= 4096,
-		},
-		{
-			.name	= "read scull0's size",
-			.path	= "/sys/devices/scull0/size",
-			.want	= 0,
 		},
 		{
 			.name	= "read scull0's buffer size",
@@ -618,19 +639,32 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "scull0 read only open",
-			.dev	= "scull0",
-			.flags	= O_RDONLY,
+			.name		= "scull0 read only open",
+			.dev		= "scull0",
+			.flags		= O_RDONLY,
+			.quantum	= 4096,
+			.size		= 0,
 		},
 		{
-			.name	= "scull1 write only open",
-			.dev	= "scull1",
-			.flags	= O_WRONLY,
+			.name		= "scull1 write only open",
+			.dev		= "scull1",
+			.flags		= O_WRONLY,
+			.quantum	= 4096,
+			.size		= 0,
 		},
 		{
-			.name	= "scull2 read/write open",
-			.dev	= "scull2",
-			.flags	= O_RDWR,
+			.name		= "scull2 read/write open",
+			.dev		= "scull2",
+			.flags		= O_RDWR,
+			.quantum	= 4096,
+			.size		= 0,
+		},
+		{
+			.name		= "scull3 read/write trunc open",
+			.dev		= "scull3",
+			.flags		= O_RDWR|O_TRUNC,
+			.quantum	= 4096,
+			.size		= 0,
 		},
 		{.name = NULL}, /* sentry */
 	};

@@ -7,16 +7,12 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/sysfs.h>
 #include <linux/mutex.h>
-
-struct scull_qset {
-	struct scull_qset	*next;
-	void			**data;
-};
 
 struct scull_device {
 	struct mutex		lock;
-	struct scull_qset	*data;
+	size_t			quantum;
 	size_t			size;
 	struct cdev		cdev;
 	struct device		base;
@@ -24,13 +20,12 @@ struct scull_device {
 
 static struct scull_driver {
 	dev_t			devt;
-	size_t			default_qset;
 	size_t			default_quantum;
 	struct file_operations	fops;
+	struct device_type	type;
 	struct device_driver	base;
 	struct scull_device	devs[4];
 } scull_driver = {
-	.default_qset		= 1024,
 	.default_quantum	= PAGE_SIZE,
 	.base.name		= "scull",
 	.base.owner		= THIS_MODULE,
@@ -71,26 +66,47 @@ static int open(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+static ssize_t quantum_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct scull_device *dev = container_of(base, struct scull_device, base);
+	size_t quantum;
+	if (mutex_lock_interruptible(&dev->lock))
+	    return -ERESTARTSYS;
+	quantum = dev->quantum;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", quantum);
+}
+static DEVICE_ATTR_RO(quantum);
+
 static ssize_t size_show(struct device *base, struct device_attribute *attr,
 			 char *page)
 {
 	struct scull_device *dev = container_of(base, struct scull_device, base);
 	size_t size;
-
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	size = dev->size;
 	mutex_unlock(&dev->lock);
-	return size;
+	return snprintf(page, PAGE_SIZE, "%ld\n", size);
 }
 static DEVICE_ATTR_RO(size);
+
+static struct attribute *top_attrs[] = {
+	&dev_attr_quantum.attr,
+	&dev_attr_size.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(top);
 
 static void __init init_driver(struct scull_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
-	drv->fops.read	= read;
-	drv->fops.write	= write;
-	drv->fops.open	= open;
+	drv->type.name		= drv->base.name;
+	drv->type.groups	= top_groups;
+	drv->fops.read		= read;
+	drv->fops.write		= write;
+	drv->fops.open		= open;
 }
 
 static int __init init(void)
@@ -112,30 +128,25 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-		memset(&dev->base, 0, sizeof(struct device));
-		dev->base.init_name = name;
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
-		device_initialize(&dev->base);
-		cdev_init(&dev->cdev, &drv->fops);
+		memset(dev, 0, sizeof(struct scull_device));
 		mutex_init(&dev->lock);
+		dev->quantum = drv->default_quantum;
 		dev->size = 0;
+		cdev_init(&dev->cdev, &drv->fops);
+		device_initialize(&dev->base);
+		dev->base.init_name = name;
+		dev->base.type = &drv->type;
+		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			j = i;
 			goto err;
 		}
-		err = device_create_file(&dev->base, &dev_attr_size);
-		if (err) {
-			j = i+1;
-			goto err;
-		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
-		device_remove_file(&dev->base, &dev_attr_size);
+	for (i = 0, dev = drv->devs; i < j; i++, dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
-	}
 	unregister_chrdev_region(drv->devt, nr);
 	return err;
 }
@@ -147,10 +158,8 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct scull_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
-		device_remove_file(&dev->base, &dev_attr_size);
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
-	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);
