@@ -5,6 +5,7 @@ MODS  += write
 MODS  += readv
 MODS  += writev
 MODS  += scull
+MODS  += proc
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
@@ -21,12 +22,14 @@ clean: clean_tests
 	$(MAKE) -C $(KDIR) M=$(shell pwd) $@
 load:
 	$(info loading modules...)
-	@for mod in $(MODS); do insmod ./$${mod}.ko; done
+	@for mod in $(shell cat modules.order);   \
+		do insmod ./$$(basename $${mod}); \
+	done
 unload:
 	$(info unloading modules...)
-	@# remove ldd.ko last
-	@-for mod in $(filter-out ldd,$(MODS)); do rmmod ./$$mod.ko; done
-	@-rmmod ./ldd.ko
+	@for mod in $(shell cat modules.order|sort -r); \
+		do rmmod ./$$(basename $${mod});        \
+	done
 reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
