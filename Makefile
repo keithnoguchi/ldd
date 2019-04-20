@@ -27,8 +27,8 @@ load:
 	done
 unload:
 	$(info unloading modules...)
-	@for mod in $(shell cat modules.order|sort -r); \
-		do rmmod ./$$(basename $${mod});        \
+	@-for mod in $(shell cat modules.order|sort -r); \
+		do rmmod ./$$(basename $${mod});         \
 	done
 reload: unload load
 # selftest based unit tests under tests directory.
