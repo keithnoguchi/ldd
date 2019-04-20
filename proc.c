@@ -9,8 +9,8 @@
 #include <linux/err.h>
 
 static struct proc_driver {
-	struct device_driver	base;
 	struct proc_dir_entry	*top;
+	struct device_driver	base;
 } proc_driver;
 
 static int show(struct seq_file *sf, void *data)
@@ -24,7 +24,7 @@ static int __init init(void)
 	struct proc_driver *drv = &proc_driver;
 	struct proc_dir_entry *dir;
 
-	dir = proc_create_single_data("proc", 0644, NULL, show, drv);
+	dir = proc_create_single_data("driver/proc", 0644, NULL, show, drv);
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
 	drv->top = dir;
