@@ -8,16 +8,21 @@
 
 ### Character device drivers
 
-- [open.c](open.c): open(2) and close(2) example driver
+- [open.c](open.c): open(2) and close(2) sample driver
   - [open_test.c](tests/open_test.c): open.c unit test
-- [read.c](read.c): read(2) example driver
+- [read.c](read.c): read(2) sample driver
   - [read_test.c](tests/read_test.c): read.c unit test
-- [write.c](write.c): write(2) example driver
+- [write.c](write.c): write(2) sample driver
   - [write_test.c](tests/write_test.c): write.c unit test
-- [readv.c](readv.c): readv(2) example driver
+- [readv.c](readv.c): readv(2) sample driver
   - [readv_test.c](tests/readv_test.c): readv.c unit test
-- [writev.c](writev.c): writev(2) example driver
+- [writev.c](writev.c): writev(2) sample driver
   - [writev_test.c](tests/writev_test.c): writev.c unit test
+
+### Debugging drivers
+
+- [proc.c](proc.c): /proc file sample driver
+  - [proc_test.c](tests/proc_test.c): proc.c unit test
 
 ## Build
 

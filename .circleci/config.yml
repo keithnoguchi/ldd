@@ -23,7 +23,7 @@ jobs:
       - run:
           name: Install kernel source code
           command: |
-            pacman -S --noconfirm linux linux-headers
+            pacman -Sy --noconfirm linux linux-headers
       - persist_to_workspace:
           root: /
           paths:
