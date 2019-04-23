@@ -44,9 +44,9 @@ static ssize_t write_iter(struct kiocb *cb, struct iov_iter *iter)
 	for (i = 0, iov = iter->iov; i < iter->nr_segs; i++, iov++) {
 		total += iov->iov_len;
 		offset += iov->iov_len;
-		if (offset > dev->size)
-			dev->size = offset;
 	}
+	if (dev->size < offset)
+		dev->size = offset;
 	mutex_unlock(&dev->lock);
 	return total;
 }

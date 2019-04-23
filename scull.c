@@ -122,7 +122,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	/* per quantum write */
 	if (count > dev->quantum-dpos)
 		count = dev->quantum-dpos;
-	/* copy_from_user does not error */
+	/* copy_from_user() does not return error */
 	len = count;
 	while ((rem = copy_from_user(*data+dpos, buf, len))) {
 		dpos += len-rem;

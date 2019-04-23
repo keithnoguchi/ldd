@@ -32,7 +32,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	struct write_device *dev = fp->private_data;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (*pos+count > dev->size)
+	if (dev->size < *pos+count)
 		dev->size = *pos+count;
 	mutex_unlock(&dev->lock);
 	*pos += count;

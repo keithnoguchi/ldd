@@ -37,7 +37,7 @@ module_param_named(default_size, readv_driver.default_size, ulong, 0444);
 static ssize_t read_iter(struct kiocb *cb, struct iov_iter *iter)
 {
 	struct readv_device *dev = cb->ki_filp->private_data;
-	size_t size, offset, count;
+	size_t offset, count;
 	ssize_t total;
 	int i;
 
@@ -55,7 +55,7 @@ static ssize_t read_iter(struct kiocb *cb, struct iov_iter *iter)
 	for (i = 0; i < iter->nr_segs; i++) {
 		count = iter->iov[i].iov_len;
 		if (offset+count > dev->size)
-			count = size-offset;
+			count = dev->size-offset;
 		offset += count;
 	}
 out:
