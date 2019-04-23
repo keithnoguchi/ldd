@@ -24,7 +24,6 @@ static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
 	char buf[BUFSIZ];
-	ssize_t len, rem;
 	int ret, fd;
 	FILE *fp;
 	long got;
@@ -88,18 +87,23 @@ static void test(const struct test *restrict t)
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
+	/* device operation */
 	fd = open(path, t->flags);
 	if (fd == -1)
 		goto perr;
-	/* write data */
-	for (rem = t->size; rem; rem -= len) {
-		len = rem < sizeof(buf) ? rem : sizeof(buf);
-		len = write(fd, buf, len);
-		if (len == -1)
-			goto perr;
+	/* write */
+	if ((t->flags&O_ACCMODE) != O_RDONLY) {
+		ssize_t len, rem;
+		for (rem = t->size; rem; rem -= len) {
+			len = rem < sizeof(buf) ? rem : sizeof(buf);
+			len = write(fd, buf, len);
+			if (len == -1)
+				goto perr;
+		}
 	}
 	if (close(fd))
 		goto perr;
+	/* size */
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/size", t->dev);
 	if (ret < 0)
 		goto perr;
