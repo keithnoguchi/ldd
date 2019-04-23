@@ -9,10 +9,11 @@
 #include <linux/device.h>
 #include <linux/sysfs.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
 
 struct scull_qset {
 	struct scull_qset	*next;
-	void			*data;
+	void			*data[];
 };
 
 struct scull_device {
@@ -40,6 +41,45 @@ static struct scull_driver {
 	.base.owner		= THIS_MODULE,
 };
 
+static struct scull_qset *scull_follow(struct scull_device *dev, loff_t pos)
+{
+	struct scull_qset **datap, *newp;
+	int i, spos = pos/(dev->quantum*dev->qset);
+
+	datap = &dev->data;
+	for (i = 0; i < spos; i++) {
+		if (*datap) {
+			datap = &(*datap)->next;
+			continue;
+		}
+		newp = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+		if (!newp)
+			return NULL;
+		memset(newp, 0, sizeof(struct scull_qset));
+		*datap = newp;
+		datap = &newp->next;
+	}
+	if (*datap)
+		return *datap;
+	newp = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+	if (!newp)
+		return NULL;
+	memset(newp, 0, sizeof(struct scull_qset));
+	*datap = newp;
+	return newp;
+}
+
+static void scull_trim(struct scull_device *dev)
+{
+	struct scull_qset *data, *next;
+	for (data = dev->data; data; data = next) {
+		next = data->next;
+		kfree(data);
+	}
+	dev->data = NULL;
+	dev->size = 0;
+}
+
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct scull_device *dev = fp->private_data;
@@ -58,20 +98,37 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct scull_device *dev = fp->private_data;
+	struct scull_qset *qset;
+	ssize_t ret;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (dev->size > *pos+count)
+	qset = scull_follow(dev, *pos);
+	if (!qset) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	if (dev->size < *pos+count)
 		dev->size = *pos+count;
-	mutex_unlock(&dev->lock);
 	*pos += count;
-	return count;
+	ret = count;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static int open(struct inode *ip, struct file *fp)
 {
 	struct scull_device *dev = container_of(ip->i_cdev, struct scull_device, cdev);
 	fp->private_data = dev;
+	if ((fp->f_flags&O_ACCMODE) == O_RDONLY)
+		return 0;
+	if (!(fp->f_flags&O_TRUNC))
+		return 0;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	scull_trim(dev);
+	mutex_unlock(&dev->lock);
 	return 0;
 }
 
@@ -86,7 +143,28 @@ static ssize_t qset_show(struct device *base, struct device_attribute *attr,
 	mutex_unlock(&dev->lock);
 	return snprintf(page, PAGE_SIZE, "%ld\n", qset);
 }
-static DEVICE_ATTR_RO(qset);
+
+static ssize_t qset_store(struct device *base, struct device_attribute *attr,
+			  const char *page, size_t count)
+{
+	struct scull_device *dev = container_of(base, struct scull_device, base);
+	long qset;
+	int err;
+
+	err = kstrtol(page, 10, &qset);
+	if (err)
+		return err;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (qset == dev->qset)
+		goto out;
+	scull_trim(dev);
+	dev->qset = qset;
+out:
+	mutex_unlock(&dev->lock);
+	return count;
+}
+static DEVICE_ATTR_RW(qset);
 
 static ssize_t quantum_show(struct device *base, struct device_attribute *attr,
 			    char *page)
@@ -99,7 +177,28 @@ static ssize_t quantum_show(struct device *base, struct device_attribute *attr,
 	mutex_unlock(&dev->lock);
 	return snprintf(page, PAGE_SIZE, "%ld\n", quantum);
 }
-static DEVICE_ATTR_RO(quantum);
+
+static ssize_t quantum_store(struct device *base, struct device_attribute *attr,
+			     const char *page, size_t count)
+{
+	struct scull_device *dev = container_of(base, struct scull_device, base);
+	long quantum;
+	int err;
+
+	err = kstrtol(page, 10, &quantum);
+	if (err)
+		return err;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (quantum == dev->quantum)
+		goto out;
+	scull_trim(dev);
+	dev->quantum = quantum;
+out:
+	mutex_unlock(&dev->lock);
+	return count;
+}
+static DEVICE_ATTR_RW(quantum);
 
 static ssize_t size_show(struct device *base, struct device_attribute *attr,
 			 char *page)
@@ -155,6 +254,7 @@ static int __init init(void)
 		mutex_init(&dev->lock);
 		dev->qset = drv->default_qset;
 		dev->quantum = drv->default_quantum;
+		dev->data = NULL;
 		dev->size = 0;
 		cdev_init(&dev->cdev, &drv->fops);
 		device_initialize(&dev->base);
@@ -182,8 +282,10 @@ static void __exit term(void)
 	int i, nr = ARRAY_SIZE(drv->devs);
 	struct scull_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+		scull_trim(dev);
 		cdev_device_del(&dev->cdev, &dev->base);
+	}
 	unregister_chrdev_region(drv->devt, nr);
 }
 module_exit(term);

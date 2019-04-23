@@ -24,12 +24,25 @@ static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
 	char buf[BUFSIZ];
+	ssize_t len, rem;
 	int ret, fd;
 	FILE *fp;
 	long got;
 
+	/* quantum set */
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/qset", t->dev);
 	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "w");
+	if (fp == NULL)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->qset);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, sizeof(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
 		goto perr;
 	fp = fopen(path, "r");
 	if (fp == NULL)
@@ -44,8 +57,20 @@ static void test(const struct test *restrict t)
 		goto err;
 	}
 	fclose(fp);
+	/* quantum */
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/quantum", t->dev);
 	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "w");
+	if (fp == NULL)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->quantum);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, sizeof(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
 		goto perr;
 	fp = fopen(path, "r");
 	if (fp == NULL)
@@ -65,6 +90,15 @@ static void test(const struct test *restrict t)
 		goto perr;
 	fd = open(path, t->flags);
 	if (fd == -1)
+		goto perr;
+	/* write data */
+	for (rem = t->size; rem; rem -= len) {
+		len = rem < sizeof(buf) ? rem : sizeof(buf);
+		len = write(fd, buf, len);
+		if (len == -1)
+			goto perr;
+	}
+	if (close(fd))
 		goto perr;
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/size", t->dev);
 	if (ret < 0)
@@ -682,6 +716,70 @@ int main(void)
 			.qset		= 1024,
 			.quantum	= 4096,
 			.size		= 0,
+		},
+		{
+			.name		= "scull0 1024 O_TRUNC write",
+			.dev		= "scull0",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1024,
+			.quantum	= 4096,
+			.size		= 1024,
+		},
+		{
+			.name		= "scull1 4095 O_TRUNC write",
+			.dev		= "scull0",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1024,
+			.quantum	= 4096,
+			.size		= 4095,
+		},
+		{
+			.name		= "scull2 4096 O_TRUNC write",
+			.dev		= "scull2",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1024,
+			.quantum	= 4096,
+			.size		= 4096,
+		},
+		{
+			.name		= "scull3 4097 O_TRUNC write",
+			.dev		= "scull3",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1024,
+			.quantum	= 4096,
+			.size		= 4097,
+		},
+		{
+			.name		= "scull0 1024 O_TRUNC write on (1/32)",
+			.dev		= "scull0",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1,
+			.quantum	= 32,
+			.size		= 1024,
+		},
+		{
+			.name		= "scull1 4095 O_TRUNC write on (1/32)",
+			.dev		= "scull0",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1,
+			.quantum	= 32,
+			.size		= 4095,
+		},
+		{
+			.name		= "scull2 4096 O_TRUNC write on (1/32)",
+			.dev		= "scull2",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1,
+			.quantum	= 32,
+			.size		= 4096,
+		},
+		{
+			.name		= "scull3 4097 O_TRUNC write on (1/32)",
+			.dev		= "scull3",
+			.flags		= O_WRONLY|O_TRUNC,
+			.qset		= 1,
+			.quantum	= 32,
+			.size		= 4097,
 		},
 		{.name = NULL}, /* sentry */
 	};
