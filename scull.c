@@ -10,6 +10,7 @@
 #include <linux/sysfs.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 struct scull_qset {
 	struct scull_qset	*next;
@@ -43,28 +44,28 @@ static struct scull_driver {
 
 static struct scull_qset *scull_follow(struct scull_device *dev, loff_t pos)
 {
-	struct scull_qset **datap, *newp;
+	size_t ssize = sizeof(struct scull_qset)+sizeof(void *)*dev->qset;
+	struct scull_qset *newp, **datap = &dev->data;
 	int i, spos = pos/(dev->quantum*dev->qset);
 
-	datap = &dev->data;
 	for (i = 0; i < spos; i++) {
 		if (*datap) {
 			datap = &(*datap)->next;
 			continue;
 		}
-		newp = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+		newp = kmalloc(ssize, GFP_KERNEL);
 		if (!newp)
 			return NULL;
-		memset(newp, 0, sizeof(struct scull_qset));
+		memset(newp, 0, ssize);
 		*datap = newp;
 		datap = &newp->next;
 	}
 	if (*datap)
 		return *datap;
-	newp = kmalloc(sizeof(struct scull_qset), GFP_KERNEL);
+	newp = kmalloc(ssize, GFP_KERNEL);
 	if (!newp)
 		return NULL;
-	memset(newp, 0, sizeof(struct scull_qset));
+	memset(newp, 0, ssize);
 	*datap = newp;
 	return newp;
 }
@@ -99,14 +100,34 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 {
 	struct scull_device *dev = fp->private_data;
 	struct scull_qset *qset;
-	ssize_t ret;
+	ssize_t ret = -ENOMEM;
+	size_t spos, qpos, dpos;
+	size_t rem, len;
+	void **data;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	qset = scull_follow(dev, *pos);
-	if (!qset) {
-		ret = -ENOMEM;
+	if (!qset)
 		goto out;
+	spos = *pos%(dev->qset*dev->quantum);
+	qpos = spos/dev->quantum;
+	dpos = spos%dev->quantum;
+	data = &qset->data[qpos];
+	if (!*data) {
+		*data = kmalloc(dev->quantum, GFP_KERNEL);
+		if (!*data)
+			goto out;
+	}
+	/* per quantum write */
+	if (count > dev->quantum-dpos)
+		count = dev->quantum-dpos;
+	/* copy_from_user does not error */
+	len = count;
+	while ((rem = copy_from_user(*data+dpos, buf, len))) {
+		dpos += len-rem;
+		buf += len-rem;
+		len -= rem;
 	}
 	if (dev->size < *pos+count)
 		dev->size = *pos+count;
