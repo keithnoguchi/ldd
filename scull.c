@@ -10,8 +10,15 @@
 #include <linux/sysfs.h>
 #include <linux/mutex.h>
 
+struct scull_qset {
+	struct scull_qset	*next;
+	void			*data;
+};
+
 struct scull_device {
 	struct mutex		lock;
+	struct scull_qset	*data;
+	size_t			qset;
 	size_t			quantum;
 	size_t			size;
 	struct cdev		cdev;
@@ -20,12 +27,14 @@ struct scull_device {
 
 static struct scull_driver {
 	dev_t			devt;
+	size_t			default_qset;
 	size_t			default_quantum;
 	struct file_operations	fops;
 	struct device_type	type;
 	struct device_driver	base;
 	struct scull_device	devs[4];
 } scull_driver = {
+	.default_qset		= 1024,
 	.default_quantum	= PAGE_SIZE,
 	.base.name		= "scull",
 	.base.owner		= THIS_MODULE,
@@ -66,6 +75,19 @@ static int open(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+static ssize_t qset_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct scull_device *dev = container_of(base, struct scull_device, base);
+	size_t qset;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	qset = dev->qset;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", qset);
+}
+static DEVICE_ATTR_RO(qset);
+
 static ssize_t quantum_show(struct device *base, struct device_attribute *attr,
 			    char *page)
 {
@@ -93,6 +115,7 @@ static ssize_t size_show(struct device *base, struct device_attribute *attr,
 static DEVICE_ATTR_RO(size);
 
 static struct attribute *top_attrs[] = {
+	&dev_attr_qset.attr,
 	&dev_attr_quantum.attr,
 	&dev_attr_size.attr,
 	NULL,
@@ -130,6 +153,7 @@ static int __init init(void)
 		}
 		memset(dev, 0, sizeof(struct scull_device));
 		mutex_init(&dev->lock);
+		dev->qset = drv->default_qset;
 		dev->quantum = drv->default_quantum;
 		dev->size = 0;
 		cdev_init(&dev->cdev, &drv->fops);

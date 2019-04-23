@@ -15,6 +15,7 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	int		flags;
+	size_t		qset;
 	size_t		quantum;
 	size_t		size;
 };
@@ -27,13 +28,29 @@ static void test(const struct test *restrict t)
 	FILE *fp;
 	long got;
 
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/qset", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->qset) {
+		fprintf(stderr, "%s: unexpected qset value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->qset, got);
+		goto err;
+	}
+	fclose(fp);
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/quantum", t->dev);
 	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (fp == NULL)
 		goto perr;
-	ret = fread(buf, sizeof(buf), 1, fp);
+	fread(buf, sizeof(buf), 1, fp);
 	if (ferror(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
@@ -42,6 +59,7 @@ static void test(const struct test *restrict t)
 			t->name, t->quantum, got);
 		goto err;
 	}
+	fclose(fp);
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
@@ -316,11 +334,6 @@ void test_scull_attr_readl(void)
 		const char	*path;
 		long		want;
 	} *t, tests[] = {
-		{
-			.name	= "read scull0's quantum set size",
-			.path	= "/sys/devices/scull0/quantum_set",
-			.want	= 1024,
-		},
 		{
 			.name	= "read scull0's buffer size",
 			.path	= "/sys/devices/scull0/buffer/size",
@@ -642,6 +655,7 @@ int main(void)
 			.name		= "scull0 read only open",
 			.dev		= "scull0",
 			.flags		= O_RDONLY,
+			.qset		= 1024,
 			.quantum	= 4096,
 			.size		= 0,
 		},
@@ -649,6 +663,7 @@ int main(void)
 			.name		= "scull1 write only open",
 			.dev		= "scull1",
 			.flags		= O_WRONLY,
+			.qset		= 1024,
 			.quantum	= 4096,
 			.size		= 0,
 		},
@@ -656,6 +671,7 @@ int main(void)
 			.name		= "scull2 read/write open",
 			.dev		= "scull2",
 			.flags		= O_RDWR,
+			.qset		= 1024,
 			.quantum	= 4096,
 			.size		= 0,
 		},
@@ -663,6 +679,7 @@ int main(void)
 			.name		= "scull3 read/write trunc open",
 			.dev		= "scull3",
 			.flags		= O_RDWR|O_TRUNC,
+			.qset		= 1024,
 			.quantum	= 4096,
 			.size		= 0,
 		},
