@@ -89,16 +89,44 @@ static void scull_trim(struct scull_device *dev)
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct scull_device *dev = fp->private_data;
+	struct scull_qset *qset;
+	ssize_t ret = -ENOMEM;
+	size_t spos, qpos, dpos;
+	size_t rem, len;
+	void **data;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (*pos+count > dev->size)
-		count = dev->size-*pos;
-	mutex_unlock(&dev->lock);
-	if (count < 0)
-		count = 0;
+	if (*pos > dev->size) {
+		ret = 0;
+		goto out;
+	}
+	qset = scull_follow(dev, *pos);
+	if (!qset)
+		goto out;
+	spos = *pos%(dev->qset*dev->quantum);
+	qpos = spos/dev->quantum;
+	dpos = spos%dev->quantum;
+	data = &qset->data[qpos];
+	if (!*data) {
+		*data = kmalloc(dev->quantum, GFP_KERNEL);
+		if (!*data)
+			goto out;
+		memset(*data, 0, dev->quantum);
+	}
+	if (dpos+count > dev->quantum)
+		count = dev->quantum-dpos;
+	len = count;
+	while ((rem = copy_to_user(buf, *data+dpos, len))) {
+		dpos += len-rem;
+		buf += len-rem;
+		len = rem;
+	}
 	*pos += count;
-	return count;
+	ret = count;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
@@ -123,6 +151,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 		*data = kmalloc(dev->quantum, GFP_KERNEL);
 		if (!*data)
 			goto out;
+		memset(*data, 0, dev->quantum);
 	}
 	/* per quantum write */
 	if (count > dev->quantum-dpos)
@@ -132,7 +161,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	while ((rem = copy_from_user(*data+dpos, buf, len))) {
 		dpos += len-rem;
 		buf += len-rem;
-		len -= rem;
+		len = rem;
 	}
 	if (dev->size < *pos+count)
 		dev->size = *pos+count;

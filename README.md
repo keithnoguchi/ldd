@@ -18,6 +18,8 @@
   - [readv_test.c](tests/readv_test.c): readv.c unit test
 - [writev.c](writev.c): writev(2) sample driver
   - [writev_test.c](tests/writev_test.c): writev.c unit test
+- [scull.c](scull.c): Simple Character Utility for Loading Localities driver
+  - [scull_test.c](tests/scull_test.c): scull.c unit test
 
 ### Debugging drivers
 
