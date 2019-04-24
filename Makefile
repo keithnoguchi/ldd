@@ -6,6 +6,7 @@ MODS  += readv
 MODS  += writev
 MODS  += scull
 MODS  += proc
+MODS  += seq
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
@@ -35,7 +36,7 @@ reload: unload load
 .PHONY: test run_tests clean_tests
 test: modules reload run_tests
 run_tests:
-	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
+	TESTS="$(TESTS)" $(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
 $(TESTS): modules reload
