@@ -73,7 +73,12 @@ static struct scull_qset *scull_follow(struct scull_device *dev, loff_t pos)
 static void scull_trim(struct scull_device *dev)
 {
 	struct scull_qset *data, *next;
+	int i;
+
 	for (data = dev->data; data; data = next) {
+		for (i = 0; i < dev->qset; i++)
+			if (data->data[i])
+				kfree(data->data[i]);
 		next = data->next;
 		kfree(data);
 	}
