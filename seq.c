@@ -28,9 +28,25 @@ static struct seq_driver {
 	.base.name	= "seq",
 };
 
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+{
+	struct seq_device *dev = container_of(fp->private_data, struct seq_device, base);
+	printk(KERN_ALERT "read(%s)\n", dev_name(dev->base.this_device));
+	return 0;
+}
+
+static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
+{
+	struct seq_device *dev = container_of(fp->private_data, struct seq_device, base);
+	printk(KERN_ALERT "write(%s)\n", dev_name(dev->base.this_device));
+	return 0;
+}
+
 static void __init init_driver(struct seq_driver *drv)
 {
 	drv->fops.owner = THIS_MODULE;
+	drv->fops.read	= read;
+	drv->fops.write	= write;
 }
 
 static int __init init_proc(struct seq_driver *drv)
