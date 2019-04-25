@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -13,18 +14,44 @@
 struct test {
 	const char	*const name;
 	const char	*const path;
+	const char	*const dev;
 	int		flags;
 };
 
 static void test(const struct test *restrict t)
 {
-	int fd;
+	char path[PATH_MAX];
+	int ret, fd;
 
+	if (!t->path)
+		goto dev;
 	fd = open(t->path, t->flags);
 	if (fd == -1) {
-		perror("open");
+		fprintf(stderr, "%s: open(%s) %s\n", t->name,
+			t->path, strerror(errno));
 		goto err;
 	}
+	if (close(fd) == -1) {
+		fprintf(stderr, "%s: close(%s) %s\n", t->name,
+			t->path, strerror(errno));
+		goto err;
+	}
+dev:
+	if (!t->dev)
+		goto done;
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0) {
+		fprintf(stderr, "%s: snprintf(%s) %s\n", t->name,
+			path, strerror(errno));
+		goto err;
+	}
+	fd = open(path, O_RDONLY);
+	if (fd == -1) {
+		fprintf(stderr, "%s: open(%s) %s\n", t->name,
+			path, strerror(errno));
+		goto err;
+	}
+done:
 	exit(EXIT_SUCCESS);
 err:
 	exit(EXIT_FAILURE);
@@ -37,6 +64,14 @@ int main(void)
 			.name	= "/proc/driver/seq directory",
 			.path	= "/proc/driver/seq",
 			.flags	= O_RDONLY|O_DIRECTORY,
+		},
+		{
+			.name	= "/dev/seq0 device existance",
+			.dev	= "seq0",
+		},
+		{
+			.name	= "/dev/seq1 device existance",
+			.dev	= "seq1",
 		},
 		{.name = NULL}, /* sentry */
 	};

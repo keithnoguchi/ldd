@@ -19,15 +19,21 @@ struct seq_device {
 
 static struct seq_driver {
 	struct proc_dir_entry	*top;
+	struct file_operations	fops;
 	struct device_driver	base;
-	struct seq_device	devs[4];
+	struct seq_device	devs[2];
 } seq_driver = {
 	.top		= NULL,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "seq",
 };
 
-static int init_proc(struct seq_driver *drv)
+static void __init init_driver(struct seq_driver *drv)
+{
+	drv->fops.owner = THIS_MODULE;
+}
+
+static int __init init_proc(struct seq_driver *drv)
 {
 	struct proc_dir_entry *dir;
 	char path[11];
@@ -51,6 +57,7 @@ static int __init init(void)
 	struct seq_device *dev;
 	int err;
 
+	init_driver(drv);
 	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err < 0) {
@@ -59,6 +66,7 @@ static int __init init(void)
 		}
 		dev->base.minor = MISC_DYNAMIC_MINOR;
 		dev->base.name = name;
+		dev->base.fops = &drv->fops;
 		err = misc_register(&dev->base);
 		if (err) {
 			j = i;
