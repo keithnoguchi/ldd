@@ -22,8 +22,9 @@ static struct open_driver {
 	struct device_driver	base;
 	struct open_device	devs[1000]; /* 1000 devices!? */
 } open_driver = {
-	.base.name	= "open",
+	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
+	.base.name	= "open",
 };
 
 static int open(struct inode *ip, struct file *fp)
@@ -51,6 +52,7 @@ static DEVICE_ATTR_RO(open_nr);
 
 static void __init init_driver(struct open_driver *drv)
 {
+	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 }
@@ -77,6 +79,7 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct open_device));
 		atomic_set(&dev->open_nr, 0);
 		cdev_init(&dev->cdev, &drv->fops);
+		dev->cdev.owner = THIS_MODULE;
 		device_initialize(&dev->base);
 		dev->base.init_name = name;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);

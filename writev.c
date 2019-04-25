@@ -23,8 +23,9 @@ static struct writev_driver {
 	struct device_driver	base;
 	struct writev_device	devs[4]; /* 4 device nodes */
 } writev_driver = {
-	.base.name	= "writev",
+	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
+	.base.name	= "writev",
 };
 
 static ssize_t write_iter(struct kiocb *cb, struct iov_iter *iter)
@@ -112,6 +113,7 @@ static int __init init(void)
 		dev->size = 0;
 		mutex_init(&dev->lock);
 		cdev_init(&dev->cdev, &drv->fops);
+		dev->cdev.owner = THIS_MODULE;
 		device_initialize(&dev->base);
 		dev->base.init_name = name;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);

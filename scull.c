@@ -38,8 +38,9 @@ static struct scull_driver {
 } scull_driver = {
 	.default_qset		= 1024,
 	.default_quantum	= PAGE_SIZE,
-	.base.name		= "scull",
+	.fops.owner		= THIS_MODULE,
 	.base.owner		= THIS_MODULE,
+	.base.name		= "scull",
 };
 
 static struct scull_qset *scull_follow(struct scull_device *dev, loff_t pos)
@@ -312,6 +313,7 @@ static int __init init(void)
 		dev->data = NULL;
 		dev->size = 0;
 		cdev_init(&dev->cdev, &drv->fops);
+		dev->cdev.owner = THIS_MODULE;
 		device_initialize(&dev->base);
 		dev->base.init_name = name;
 		dev->base.type = &drv->type;
