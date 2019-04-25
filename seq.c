@@ -54,6 +54,7 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 		ptr += len-rem;
 		len = rem;
 	}
+	*pos += count;
 	ret = count;
 out:
 	mutex_unlock(&dev->lock);
@@ -91,6 +92,9 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 		buf += len-rem;
 		len = rem;
 	}
+	*pos += count;
+	if (*pos > dev->size)
+		dev->size = *pos;
 	ret = count;
 out:
 	mutex_unlock(&dev->lock);
