@@ -23,7 +23,6 @@ static struct write_driver {
 	struct device_driver	base;
 	struct write_device	devs[1000]; /* 1000 devices!? */
 } write_driver = {
-	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "write",
 };
@@ -70,6 +69,7 @@ static DEVICE_ATTR_RO(size);
 static void __init init_driver(struct write_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner	= drv->base.owner;
 	drv->fops.write	= write;
 	drv->fops.open	= open;
 }

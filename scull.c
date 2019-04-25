@@ -38,7 +38,6 @@ static struct scull_driver {
 } scull_driver = {
 	.default_qset		= 1024,
 	.default_quantum	= PAGE_SIZE,
-	.fops.owner		= THIS_MODULE,
 	.base.owner		= THIS_MODULE,
 	.base.name		= "scull",
 };
@@ -282,6 +281,7 @@ static void __init init_driver(struct scull_driver *drv)
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->type.name		= drv->base.name;
 	drv->type.groups	= top_groups;
+	drv->fops.owner		= drv->base.owner;
 	drv->fops.read		= read;
 	drv->fops.write		= write;
 	drv->fops.open		= open;

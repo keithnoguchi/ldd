@@ -22,7 +22,6 @@ static struct open_driver {
 	struct device_driver	base;
 	struct open_device	devs[1000]; /* 1000 devices!? */
 } open_driver = {
-	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "open",
 };
@@ -53,6 +52,7 @@ static DEVICE_ATTR_RO(open_nr);
 static void __init init_driver(struct open_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner		= drv->base.owner;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 }

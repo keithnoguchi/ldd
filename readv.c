@@ -29,7 +29,6 @@ struct readv_driver {
 	struct readv_device	devs[4];
 } readv_driver = {
 	.default_size	= PAGE_SIZE,
-	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "readv",
 };
@@ -108,6 +107,7 @@ static DEVICE_ATTR_RW(size);
 static void __init init_driver(struct readv_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner		= drv->base.owner;
 	drv->fops.read_iter	= read_iter;
 	drv->fops.open		= open;
 }

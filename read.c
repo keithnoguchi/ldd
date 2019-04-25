@@ -27,7 +27,6 @@ static struct read_driver {
 	struct read_device	devs[1000]; /* 1000 devices!? */
 } read_driver = {
 	.default_size	= PAGE_SIZE,
-	.fops.owner	= THIS_MODULE,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "read",
 };
@@ -89,6 +88,7 @@ static DEVICE_ATTR_RW(size);
 static void __init init_driver(struct read_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner	= drv->base.owner;
 	drv->fops.read	= read;
 	drv->fops.open	= open;
 }
