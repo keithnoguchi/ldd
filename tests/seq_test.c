@@ -66,6 +66,16 @@ int main(void)
 			.flags	= O_RDONLY|O_DIRECTORY,
 		},
 		{
+			.name	= "/proc/driver/seq/devices directory",
+			.path	= "/proc/driver/seq/devices",
+			.flags	= O_RDONLY|O_DIRECTORY,
+		},
+		{
+			.name	= "/proc/driver/seq/devices/all file",
+			.path	= "/proc/driver/seq/devices/all",
+			.flags	= O_RDONLY,
+		},
+		{
 			.name	= "/dev/seq0 device existance",
 			.dev	= "seq0",
 		},

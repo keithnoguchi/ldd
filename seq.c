@@ -24,6 +24,7 @@ struct seq_device {
 static struct seq_driver {
 	struct proc_dir_entry	*top;
 	struct file_operations	fops;
+	struct seq_operations	dops;
 	struct device_driver	base;
 	struct seq_device	devs[2];
 } seq_driver = {
@@ -101,16 +102,52 @@ out:
 	return ret;
 }
 
+static void *start_device(struct seq_file *m, loff_t *pos)
+{
+	struct seq_driver *drv = PDE_DATA(file_inode(m->file));
+	int nr = ARRAY_SIZE(drv->devs);
+	if (*pos >= nr)
+		return NULL;
+	m->private = drv;
+	return &drv->devs[(*pos)++];
+}
+
+static void stop_device(struct seq_file *m, void *v)
+{
+}
+
+static void *next_device(struct seq_file *m, void *v, loff_t *pos)
+{
+	struct seq_driver *drv = m->private;
+	int nr = ARRAY_SIZE(drv->devs);
+	if (*pos >= nr)
+		return NULL;
+	return &drv->devs[(*pos)++];
+}
+
+static int show_device(struct seq_file *m, void *v)
+{
+	struct seq_device *dev = v;
+	seq_printf(m, "Name: %s\n", dev_name(dev->base.this_device));
+	return 0;
+}
+
 static void __init init_driver(struct seq_driver *drv)
 {
+	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner = THIS_MODULE;
 	drv->fops.read	= read;
 	drv->fops.write	= write;
+	memset(&drv->dops, 0, sizeof(struct seq_operations));
+	drv->dops.start	= start_device;
+	drv->dops.stop	= stop_device;
+	drv->dops.next	= next_device;
+	drv->dops.show	= show_device;
 }
 
 static int __init init_proc(struct seq_driver *drv)
 {
-	struct proc_dir_entry *dir;
+	struct proc_dir_entry *dir, *parent;
 	char path[11];
 	int err;
 
@@ -121,7 +158,21 @@ static int __init init_proc(struct seq_driver *drv)
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
 	drv->top = dir;
+	dir = proc_mkdir("devices", drv->top);
+	if (IS_ERR(dir)) {
+		err = PTR_ERR(dir);
+		goto err;
+	}
+	parent = dir;
+	dir = proc_create_seq_data("all", S_IRUGO, parent, &drv->dops, drv);
+	if (IS_ERR(dir)) {
+		err = PTR_ERR(dir);
+		goto err;
+	}
 	return 0;
+err:
+	proc_remove(drv->top);
+	return err;
 }
 
 static int __init init(void)
