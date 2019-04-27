@@ -26,7 +26,7 @@ static struct seq_driver {
 	struct file_operations	fops;
 	struct seq_operations	dops;
 	struct device_driver	base;
-	struct seq_device	devs[2];
+	struct seq_device	devs[8];
 } seq_driver = {
 	.top		= NULL,
 	.base.owner	= THIS_MODULE,
@@ -109,20 +109,21 @@ static void *start_device(struct seq_file *m, loff_t *pos)
 	if (*pos >= nr)
 		return NULL;
 	m->private = drv;
-	return &drv->devs[(*pos)++];
+	return &drv->devs[*pos];
 }
 
 static void stop_device(struct seq_file *m, void *v)
 {
+	return;
 }
 
 static void *next_device(struct seq_file *m, void *v, loff_t *pos)
 {
 	struct seq_driver *drv = m->private;
 	int nr = ARRAY_SIZE(drv->devs);
-	if (*pos >= nr)
+	if (++(*pos) >= nr)
 		return NULL;
-	return &drv->devs[(*pos)++];
+	return &drv->devs[*pos];
 }
 
 static int show_device(struct seq_file *m, void *v)
@@ -179,7 +180,7 @@ static int __init init(void)
 {
 	struct seq_driver *drv = &seq_driver;
 	int i, j, nr = ARRAY_SIZE(drv->devs);
-	char name[5]; /* max 10 devices */
+	char name[5]; /* sizeof(drv->base.name)+2 */
 	struct seq_device *dev;
 	int err;
 
@@ -191,12 +192,12 @@ static int __init init(void)
 			goto err;
 		}
 		mutex_init(&dev->lock);
-		dev->alloc = 0;
-		dev->size = 0;
-		dev->data = NULL;
-		dev->base.name = name;
-		dev->base.fops = &drv->fops;
-		dev->base.minor = MISC_DYNAMIC_MINOR;
+		dev->alloc	= 0;
+		dev->size	= 0;
+		dev->data	= NULL;
+		dev->base.name	= name;
+		dev->base.fops	= &drv->fops;
+		dev->base.minor	= MISC_DYNAMIC_MINOR;
 		err = misc_register(&dev->base);
 		if (err) {
 			j = i;
