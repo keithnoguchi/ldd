@@ -25,6 +25,10 @@
 
 - [proc.c](proc.c): /proc file sample driver
   - [proc_test.c](tests/proc_test.c): proc.c unit test
+- [seq.c](seq.c): <linux/seq_file.h> sample driver
+  - [seq_test.c](tests/seq_file.c): seq.c unit test
+- [faulty.c](faulty.c): Kernel Oops sample driver
+  - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
 
 ## Build
 

@@ -129,7 +129,13 @@ static void *next_device(struct seq_file *m, void *v, loff_t *pos)
 static int show_device(struct seq_file *m, void *v)
 {
 	struct seq_device *dev = v;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
 	seq_printf(m, "Name: %s\n", dev_name(dev->base.this_device));
+	seq_printf(m, "\tData pointer:\t\t%-p\n\tData size:\t\t%-ld\n",
+		   dev->data, dev->size);
+	seq_printf(m, "\tData buffer size:\t%-ld\n", dev->alloc);
+	mutex_unlock(&dev->lock);
 	return 0;
 }
 

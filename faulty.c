@@ -20,10 +20,31 @@ static struct faulty_driver {
 	.base.name	= "faulty",
 };
 
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+{
+	*(int *)0 = 0; /* let it crash */
+	return 0;
+}
+
+static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
+{
+	*(int *)0 = 0; /* let it crash */
+	return 0;
+}
+
+static int open(struct inode *ip, struct file *fp)
+{
+	*(int *)0 = 0; /* let it crash */
+	return 0;
+}
+
 static void __init init_driver(struct faulty_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner	= drv->base.owner;
+	drv->fops.read	= read;
+	drv->fops.write	= write;
+	drv->fops.open	= open;
 }
 
 static int __init init(void)
