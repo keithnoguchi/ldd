@@ -8,6 +8,7 @@ MODS  += scull
 MODS  += proc
 MODS  += seq
 MODS  += faulty
+MODS  += sem
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
