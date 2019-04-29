@@ -29,11 +29,16 @@ module_param_named(default_sem_count, sem_driver.default_sem_count, int, S_IRUGO
 
 static int open(struct inode *ip, struct file *fp)
 {
+	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
+	if (down_interruptible(&dev->lock))
+		return -ERESTARTSYS;
 	return 0;
 }
 
 static int release(struct inode *ip, struct file *fp)
 {
+	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
+	up(&dev->lock);
 	return 0;
 }
 
@@ -72,7 +77,6 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
-
 	}
 	return 0;
 err:

@@ -40,11 +40,15 @@ static void test(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
+	if (fclose(fp))
+		goto perr;
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
 		goto perr;
 	fd = open(path, t->flags);
 	if (fd == -1)
+		goto perr;
+	if (close(fd))
 		goto perr;
 	exit(EXIT_SUCCESS);
 perr:
