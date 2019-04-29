@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -13,16 +14,44 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	int		flags;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	int err, fd;
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, t->flags);
+	if (fd == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
+perr:
+	fprintf(stderr, "%s: %s\n", t->name, strerror(errno));
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "sem0 O_RDONLY open",
+			.dev	= "sem0",
+			.flags	= O_RDONLY,
+		},
+		{
+			.name	= "sem0 O_WRONLY open",
+			.dev	= "sem0",
+			.flags	= O_WRONLY,
+		},
+		{
+			.name	= "sem0 O_RDWR open",
+			.dev	= "sem0",
+			.flags	= O_RDWR,
+		},
 		{.name = NULL},
 	};
 
