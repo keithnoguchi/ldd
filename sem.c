@@ -2,24 +2,30 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
+#include <linux/stat.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/semaphore.h>
 
 struct sem_device {
+	struct semaphore	lock;
 	struct miscdevice	base;
 };
 
 static struct sem_driver {
+	int			default_sem_count;
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct sem_device	devs[1];
 } sem_driver = {
-	.base.name	= "sem",
-	.base.owner	= THIS_MODULE,
+	.default_sem_count	= 1,
+	.base.name		= "sem",
+	.base.owner		= THIS_MODULE,
 };
+module_param_named(default_sem_count, sem_driver.default_sem_count, int, S_IRUGO);
 
 static int open(struct inode *ip, struct file *fp)
 {
@@ -56,6 +62,8 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
+		memset(dev, 0, sizeof(struct sem_device));
+		sema_init(&dev->lock, drv->default_sem_count);
 		dev->base.name	= name;
 		dev->base.fops	= &drv->fops;
 		dev->base.minor	= MISC_DYNAMIC_MINOR;

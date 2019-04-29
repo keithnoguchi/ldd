@@ -20,8 +20,26 @@ struct test {
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
+	char buf[BUFSIZ];
+	FILE *fp;
 	int err, fd;
+	long val;
 
+	err = snprintf(path, sizeof(path), "/sys/module/sem/parameters/default_sem_count");
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 1) {
+		fprintf(stderr, "%s: unexpected default semaphore count:\n\t- want: 1\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
 		goto perr;
@@ -31,6 +49,7 @@ static void test(const struct test *restrict t)
 	exit(EXIT_SUCCESS);
 perr:
 	fprintf(stderr, "%s: %s\n", t->name, strerror(errno));
+err:
 	exit(EXIT_FAILURE);
 }
 
