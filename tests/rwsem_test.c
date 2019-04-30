@@ -52,9 +52,44 @@ static void tester(const struct test *restrict t)
 {
 	pthread_t rids[t->readers];
 	pthread_t wids[t->writers];
+	char buf[BUFSIZ], path[PATH_MAX];
 	int i, err, fail = 0;
 	void *retp;
+	FILE *fp;
+	long val;
 
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected default readers value:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected default writers value:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
 	memset(rids, 0, sizeof(pthread_t)*t->readers);
 	memset(wids, 0, sizeof(pthread_t)*t->writers);
 	for (i = 0; i < t->readers; i++) {
@@ -102,9 +137,45 @@ join:
 		if (retp != (void *)EXIT_SUCCESS)
 			fail++;
 	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected final readers value:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected final writers value:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
 	if (fail)
 		exit(EXIT_FAILURE);
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+err:
+	exit(EXIT_FAILURE);
 }
 
 int main(void)

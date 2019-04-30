@@ -9,9 +9,12 @@
 #include <linux/sched.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/atomic.h>
 #include <linux/rwsem.h>
 
 struct rwsem_device {
+	atomic_t		readers;
+	atomic_t		writers;
 	struct rw_semaphore	lock;
 	struct miscdevice	base;
 };
@@ -60,6 +63,31 @@ static int release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+static ssize_t readers_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct rwsem_device *dev = container_of(dev_get_drvdata(base),
+						struct rwsem_device, base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->readers));
+}
+static DEVICE_ATTR_RO(readers);
+
+static ssize_t writers_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct rwsem_device *dev = container_of(dev_get_drvdata(base),
+						struct rwsem_device, base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->writers));
+}
+static DEVICE_ATTR_RO(writers);
+
+static struct attribute *rwsem_attrs[] = {
+	&dev_attr_readers.attr,
+	&dev_attr_writers.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(rwsem);
+
 static void __init init_driver(struct rwsem_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
@@ -84,11 +112,14 @@ static int __init init(void)
 			j = i;
 			goto err;
 		}
+		memset(dev, 0, sizeof(struct rwsem_device));
+		atomic_set(&dev->readers, 0);
+		atomic_set(&dev->writers, 0);
 		init_rwsem(&dev->lock);
-		memset(&dev->base, 0, sizeof(struct miscdevice));
-		dev->base.name	= name;
-		dev->base.fops	= &drv->fops;
-		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		dev->base.name		= name;
+		dev->base.fops		= &drv->fops;
+		dev->base.minor		= MISC_DYNAMIC_MINOR;
+		dev->base.groups	= rwsem_groups;
 		err = misc_register(&dev->base);
 		if (err) {
 			j = i;
