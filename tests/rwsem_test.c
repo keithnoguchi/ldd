@@ -58,7 +58,7 @@ static void tester(const struct test *restrict t)
 	FILE *fp;
 	long val;
 
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
 		       t->dev);
 	if (err < 0)
 		goto perr;
@@ -70,23 +70,7 @@ static void tester(const struct test *restrict t)
 		goto perr;
 	val = strtol(buf, NULL, 10);
 	if (val != 0) {
-		fprintf(stderr, "%s: unexpected default readers value:\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
-		goto err;
-	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
-		       t->dev);
-	if (err < 0)
-		goto perr;
-	fp = fopen(path, "r");
-	if (fp == NULL)
-		goto perr;
-	fread(buf, sizeof(buf), 1, fp);
-	if (ferror(fp))
-		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
-		fprintf(stderr, "%s: unexpected default writers value:\n\t- want: 0\n\t-  got: %ld\n",
+		fprintf(stderr, "%s: unexpected default lockers value:\n\t- want: 0\n\t-  got: %ld\n",
 			t->name, val);
 		goto err;
 	}
@@ -137,7 +121,7 @@ join:
 		if (retp != (void *)EXIT_SUCCESS)
 			fail++;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
 		       t->dev);
 	if (err < 0)
 		goto perr;
@@ -149,23 +133,7 @@ join:
 		goto perr;
 	val = strtol(buf, NULL, 10);
 	if (val != 0) {
-		fprintf(stderr, "%s: unexpected final readers value:\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
-		goto err;
-	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
-		       t->dev);
-	if (err < 0)
-		goto perr;
-	fp = fopen(path, "r");
-	if (fp == NULL)
-		goto perr;
-	fread(buf, sizeof(buf), 1, fp);
-	if (ferror(fp))
-		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
-		fprintf(stderr, "%s: unexpected final writers value:\n\t- want: 0\n\t-  got: %ld\n",
+		fprintf(stderr, "%s: unexpected final lockers value:\n\t- want: 0\n\t-  got: %ld\n",
 			t->name, val);
 		goto err;
 	}

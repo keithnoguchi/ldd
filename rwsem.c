@@ -81,9 +81,20 @@ static ssize_t writers_show(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(writers);
 
+static ssize_t lockers_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct rwsem_device *dev = container_of(dev_get_drvdata(base),
+						struct rwsem_device, base);
+	return snprintf(page, PAGE_SIZE, "%d\n",
+			atomic_read(&dev->readers)+atomic_read(&dev->writers));
+}
+static DEVICE_ATTR_RO(lockers);
+
 static struct attribute *rwsem_attrs[] = {
 	&dev_attr_readers.attr,
 	&dev_attr_writers.attr,
+	&dev_attr_lockers.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(rwsem);
