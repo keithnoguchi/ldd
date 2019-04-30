@@ -21,7 +21,7 @@
 - [scull.c](scull.c): Simple Character Utility for Loading Localities driver
   - [scull_test.c](tests/scull_test.c): scull.c unit test
 
-### Debugging drivers
+### Debugging primitive drivers
 
 - [proc.c](proc.c): /proc file sample driver
   - [proc_test.c](tests/proc_test.c): proc.c unit test
@@ -30,10 +30,12 @@
 - [faulty.c](faulty.c): Kernel Oops sample driver
   - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
 
-### Concurrency related drivers
+### Concurrency primitive drivers
 
 - [sem.c](sem.c): <linux/semaphore.h> sample driver
   - [sem_test.c](tests/sem_test.c): sem.c unit test
+- [rwsem.c](rwsem.c): <linux/rwsem.h> sample driver
+  - [rwsem_test.c](tests/rwsem_test.c): rwsem.c unit test
 
 ## Build
 

@@ -37,9 +37,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "one reader",
+			.name	= "one reader with O_RDONLY",
 			.dev	= "rwsem0",
 			.flags	= O_RDONLY,
+		},
+		{
+			.name	= "one writer with O_WRONLY",
+			.dev	= "rwsem0",
+			.flags	= O_WRONLY,
+		},
+		{
+			.name	= "one writer with O_RDWR",
+			.dev	= "rwsem0",
+			.flags	= O_RDWR,
 		},
 		{.name = NULL}, /* sentry */
 	};
