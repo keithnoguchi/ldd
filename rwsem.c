@@ -32,16 +32,23 @@ static int open(struct inode *ip, struct file *fp)
 {
 	struct rwsem_device *dev = container_of(fp->private_data, struct rwsem_device, base);
 	struct miscdevice *misc = fp->private_data;
+	int (*down)(struct rw_semaphore *);
+	atomic_t *counter;
 	int err;
 
 	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...",
 	       dev_name(misc->this_device), task_pid_nr(current));
-	if ((fp->f_flags&O_ACCMODE)&O_WRONLY)
-		err = down_write_killable(&dev->lock);
-	else
-		err = down_read_killable(&dev->lock);
+	if ((fp->f_flags&O_ACCMODE)&O_WRONLY) {
+		down = down_write_killable;
+		counter = &dev->writers;
+	} else {
+		down = down_read_killable;
+		counter = &dev->readers;
+	}
+	err = (*down)(&dev->lock);
 	if (err)
 		return -ERESTARTSYS;
+	atomic_inc(counter);
 	printk(KERN_DEBUG "[%s:%d]: semaphore aquired",
 	       dev_name(misc->this_device), task_pid_nr(current));
 	return 0;
@@ -51,13 +58,20 @@ static int release(struct inode *ip, struct file *fp)
 {
 	struct rwsem_device *dev = container_of(fp->private_data, struct rwsem_device, base);
 	struct miscdevice *misc = fp->private_data;
+	void (*up)(struct rw_semaphore *);
+	atomic_t *counter;
 
 	printk(KERN_DEBUG "[%s:%d] semaphore releasing...\n",
 	       dev_name(misc->this_device), task_pid_nr(current));
-	if ((fp->f_flags&O_ACCMODE)&O_WRONLY)
-		up_write(&dev->lock);
-	else
-		up_read(&dev->lock);
+	if ((fp->f_flags&O_ACCMODE)&O_WRONLY) {
+		up = up_write;
+		counter = &dev->writers;
+	} else {
+		up = up_read;
+		counter = &dev->readers;
+	}
+	(*up)(&dev->lock);
+	atomic_dec(counter);
 	printk(KERN_DEBUG "[%s:%d] semaphore released\n",
 	       dev_name(misc->this_device), task_pid_nr(current));
 	return 0;
