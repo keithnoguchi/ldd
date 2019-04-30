@@ -7,11 +7,15 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/fs.h>
+#include <linux/sysfs.h>
 #include <linux/miscdevice.h>
+#include <linux/atomic.h>
 #include <linux/semaphore.h>
+#include <linux/sched.h>
 
 struct sem_device {
 	struct semaphore	lock;
+	atomic_t		lock_nr;
 	struct miscdevice	base;
 };
 
@@ -30,17 +34,43 @@ module_param_named(default_sem_count, sem_driver.default_sem_count, int, S_IRUGO
 static int open(struct inode *ip, struct file *fp)
 {
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
+	struct miscdevice *misc = fp->private_data;
+	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...\n", dev_name(misc->this_device),
+	       task_pid_nr(current));
 	if (down_interruptible(&dev->lock))
 		return -ERESTARTSYS;
+	atomic_inc(&dev->lock_nr);
+	printk(KERN_DEBUG "[%s:%d]: semaphore aquired\n", dev_name(misc->this_device),
+	       task_pid_nr(current));
 	return 0;
 }
 
 static int release(struct inode *ip, struct file *fp)
 {
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
+	struct miscdevice *misc = fp->private_data;
+	printk(KERN_DEBUG "[%s:%d]: semaphre releasing...\n", dev_name(misc->this_device),
+	       task_pid_nr(current));
+	atomic_dec(&dev->lock_nr);
 	up(&dev->lock);
+	printk(KERN_DEBUG "[%s:%d]: semaphore released\n", dev_name(misc->this_device),
+	       task_pid_nr(current));
 	return 0;
 }
+
+static ssize_t lock_nr_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct sem_device *dev = container_of(dev_get_drvdata(base), struct sem_device, base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->lock_nr));
+}
+static DEVICE_ATTR_RO(lock_nr);
+
+static struct attribute *sem_attrs[] = {
+	&dev_attr_lock_nr.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(sem);
 
 static int __init init_driver(struct sem_driver *drv)
 {
@@ -68,10 +98,12 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct sem_device));
+		atomic_set(&dev->lock_nr, 0);
 		sema_init(&dev->lock, drv->default_sem_count);
-		dev->base.name	= name;
-		dev->base.fops	= &drv->fops;
-		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		dev->base.name		= name;
+		dev->base.fops		= &drv->fops;
+		dev->base.minor		= MISC_DYNAMIC_MINOR;
+		dev->base.groups	= sem_groups;
 		err = misc_register(&dev->base);
 		if (err) {
 			j = i;

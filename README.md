@@ -30,6 +30,11 @@
 - [faulty.c](faulty.c): Kernel Oops sample driver
   - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
 
+### Concurrency related drivers
+
+- [sem.c](sem.c): <linux/semaphore.h> sample driver
+  - [sem_test.c](tests/sem_test.c): sem.c unit test
+
 ## Build
 
 ```sh
