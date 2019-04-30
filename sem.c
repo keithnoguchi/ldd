@@ -34,12 +34,23 @@ module_param_named(default_sem_count, sem_driver.default_sem_count, int, S_IRUGO
 static int open(struct inode *ip, struct file *fp)
 {
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
+	const struct sem_driver *const drv = &sem_driver;
 	struct miscdevice *misc = fp->private_data;
+	int lock_nr;
+
 	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...\n", dev_name(misc->this_device),
 	       task_pid_nr(current));
 	if (down_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	atomic_inc(&dev->lock_nr);
+	lock_nr = atomic_inc_return(&dev->lock_nr);
+	if (lock_nr > drv->default_sem_count) {
+		printk(KERN_CRIT "[%s:%d]: lock_nr=%d > default_sem_count=%d\n",
+		       dev_name(misc->this_device), task_pid_nr(current),
+		       lock_nr, drv->default_sem_count);
+		atomic_dec(&dev->lock_nr);
+		up(&dev->lock);
+		return -EINVAL;
+	}
 	printk(KERN_DEBUG "[%s:%d]: semaphore aquired\n", dev_name(misc->this_device),
 	       task_pid_nr(current));
 	return 0;
@@ -49,9 +60,17 @@ static int release(struct inode *ip, struct file *fp)
 {
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
 	struct miscdevice *misc = fp->private_data;
+	int lock_nr;
+
 	printk(KERN_DEBUG "[%s:%d]: semaphre releasing...\n", dev_name(misc->this_device),
 	       task_pid_nr(current));
-	atomic_dec(&dev->lock_nr);
+	lock_nr = atomic_dec_return(&dev->lock_nr);
+	if (lock_nr < 0) {
+		printk(KERN_CRIT "[%s:%d]: lock_nr(%d) < 0\n",
+		       dev_name(misc->this_device), task_pid_nr(current),
+		       lock_nr);
+		return -EINVAL;
+	}
 	up(&dev->lock);
 	printk(KERN_DEBUG "[%s:%d]: semaphore released\n", dev_name(misc->this_device),
 	       task_pid_nr(current));
