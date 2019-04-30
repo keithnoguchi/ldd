@@ -15,8 +15,8 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
-	size_t		reader;
-	size_t		writer;
+	unsigned int	reader;
+	unsigned int	writer;
 };
 
 static void *test(const struct test *restrict t, int flags)
