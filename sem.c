@@ -8,10 +8,11 @@
 #include <linux/stat.h>
 #include <linux/fs.h>
 #include <linux/sysfs.h>
+#include <linux/sched.h>
+#include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/atomic.h>
 #include <linux/semaphore.h>
-#include <linux/sched.h>
 
 struct sem_device {
 	struct semaphore	lock;
@@ -38,8 +39,8 @@ static int open(struct inode *ip, struct file *fp)
 	struct miscdevice *misc = fp->private_data;
 	int lock_nr;
 
-	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...\n", dev_name(misc->this_device),
-	       task_pid_nr(current));
+	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...\n",
+	       dev_name(misc->this_device), task_pid_nr(current));
 	if (down_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	lock_nr = atomic_inc_return(&dev->lock_nr);
@@ -51,8 +52,8 @@ static int open(struct inode *ip, struct file *fp)
 		up(&dev->lock);
 		return -EINVAL;
 	}
-	printk(KERN_DEBUG "[%s:%d]: semaphore aquired\n", dev_name(misc->this_device),
-	       task_pid_nr(current));
+	printk(KERN_DEBUG "[%s:%d]: semaphore aquired\n",
+	       dev_name(misc->this_device), task_pid_nr(current));
 	return 0;
 }
 
@@ -62,8 +63,8 @@ static int release(struct inode *ip, struct file *fp)
 	struct miscdevice *misc = fp->private_data;
 	int lock_nr;
 
-	printk(KERN_DEBUG "[%s:%d]: semaphre releasing...\n", dev_name(misc->this_device),
-	       task_pid_nr(current));
+	printk(KERN_DEBUG "[%s:%d]: semaphre releasing...\n",
+	       dev_name(misc->this_device), task_pid_nr(current));
 	lock_nr = atomic_dec_return(&dev->lock_nr);
 	if (lock_nr < 0) {
 		printk(KERN_CRIT "[%s:%d]: lock_nr(%d) < 0\n",
@@ -72,8 +73,8 @@ static int release(struct inode *ip, struct file *fp)
 		return -EINVAL;
 	}
 	up(&dev->lock);
-	printk(KERN_DEBUG "[%s:%d]: semaphore released\n", dev_name(misc->this_device),
-	       task_pid_nr(current));
+	printk(KERN_DEBUG "[%s:%d]: semaphore released\n",
+	       dev_name(misc->this_device), task_pid_nr(current));
 	return 0;
 }
 
