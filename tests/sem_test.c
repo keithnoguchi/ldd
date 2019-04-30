@@ -15,8 +15,8 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
-	unsigned int	reader;
-	unsigned int	writer;
+	unsigned int	readers;
+	unsigned int	writers;
 };
 
 static void *test(const struct test *restrict t, int flags)
@@ -71,8 +71,8 @@ static void *writer(void *arg)
 
 static void tester(const struct test *restrict t)
 {
-	pthread_t rid[t->reader];
-	pthread_t wid[t->writer];
+	pthread_t rids[t->readers];
+	pthread_t wids[t->writers];
 	char path[PATH_MAX];
 	int i, err, *retp;
 	int fail = 0;
@@ -87,29 +87,29 @@ static void tester(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
-	memset(rid, 0, sizeof(pthread_t)*t->reader);
-	memset(wid, 0, sizeof(pthread_t)*t->writer);
-	for (i = 0; i < t->reader; i++) {
-		err = pthread_create(&rid[i], NULL, reader, (void *)t);
+	memset(rid, 0, sizeof(pthread_t)*t->readers);
+	memset(wid, 0, sizeof(pthread_t)*t->writers);
+	for (i = 0; i < t->readers; i++) {
+		err = pthread_create(&rids[i], NULL, reader, (void *)t);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
-			goto out;
+			goto join;
 		}
 	}
-	for (i = 0; i < t->writer; i++) {
-		err = pthread_create(&wid[i], NULL, writer, (void *)t);
+	for (i = 0; i < t->writers; i++) {
+		err = pthread_create(&wids[i], NULL, writer, (void *)t);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
-			goto out;
+			goto join;
 		}
 	}
-out:
-	for (i = 0; i < t->reader; i++) {
+join:
+	for (i = 0; i < t->readers; i++) {
 		if (!rid[i])
 			continue;
-		err = pthread_join(rid[i], (void **)&retp);
+		err = pthread_join(rids[i], (void **)&retp);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
@@ -117,10 +117,10 @@ out:
 		if (retp != (void *)EXIT_SUCCESS)
 			fail++;
 	}
-	for (i = 0; i < t->writer; i++) {
+	for (i = 0; i < t->writers; i++) {
 		if (!wid[i])
 			continue;
-		err = pthread_join(wid[i], (void **)&retp);
+		err = pthread_join(wids[i], (void **)&retp);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
@@ -150,82 +150,82 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "one reader",
-			.dev	= "sem0",
-			.reader	= 1,
-			.writer	= 0,
+			.name		= "one reader",
+			.dev		= "sem0",
+			.readers	= 1,
+			.writers	= 0,
 		},
 		{
-			.name	= "one writer",
-			.dev	= "sem0",
-			.reader	= 0,
-			.writer	= 1,
+			.name		= "one writer",
+			.dev		= "sem0",
+			.readers	= 0,
+			.writers	= 1,
 		},
 		{
-			.name	= "one reader and one writer",
-			.dev	= "sem0",
-			.reader	= 1,
-			.writer	= 1,
+			.name		= "one reader and one writer",
+			.dev		= "sem0",
+			.readers	= 1,
+			.writers	= 1,
 		},
 		{
-			.name	= "16 readers",
-			.dev	= "sem0",
-			.reader	= 16,
-			.writer	= 0,
+			.name		= "16 readers",
+			.dev		= "sem0",
+			.readers	= 16,
+			.writers	= 0,
 		},
 		{
-			.name	= "16 writers",
-			.dev	= "sem0",
-			.reader	= 0,
-			.writer	= 16,
+			.name		= "16 writers",
+			.dev		= "sem0",
+			.readers	= 0,
+			.writers	= 16,
 		},
 		{
-			.name	= "16 readers and 16 writers",
-			.dev	= "sem0",
-			.reader	= 16,
-			.writer	= 16,
+			.name		= "16 readers and 16 writers",
+			.dev		= "sem0",
+			.readers	= 16,
+			.writers	= 16,
 		},
 		{
-			.name	= "32 readers",
-			.dev	= "sem0",
-			.reader	= 32,
-			.writer	= 0,
+			.name		= "32 readers",
+			.dev		= "sem0",
+			.readers	= 32,
+			.writers	= 0,
 		},
 		{
-			.name	= "32 writers",
-			.dev	= "sem0",
-			.reader	= 0,
-			.writer	= 32,
+			.name		= "32 writers",
+			.dev		= "sem0",
+			.readers	= 0,
+			.writers	= 32,
 		},
 		{
-			.name	= "32 readers and 32 writers",
-			.dev	= "sem0",
-			.reader	= 32,
-			.writer	= 32,
+			.name		= "32 readers and 32 writers",
+			.dev		= "sem0",
+			.readers	= 32,
+			.writers	= 32,
 		},
 		{
-			.name	= "64 readers",
-			.dev	= "sem0",
-			.reader	= 64,
-			.writer	= 0,
+			.name		= "64 readers",
+			.dev		= "sem0",
+			.readers	= 64,
+			.writers	= 0,
 		},
 		{
-			.name	= "64 writers",
-			.dev	= "sem0",
-			.reader	= 0,
-			.writer	= 64,
+			.name		= "64 writers",
+			.dev		= "sem0",
+			.readers	= 0,
+			.writers	= 64,
 		},
 		{
-			.name	= "64 readers and 64 writers",
-			.dev	= "sem0",
-			.reader	= 64,
-			.writer	= 64,
+			.name		= "64 readers and 64 writers",
+			.dev		= "sem0",
+			.readers	= 64,
+			.writers	= 64,
 		},
 		{
-			.name	= "256 readers and 16 writers",
-			.dev	= "sem0",
-			.reader	= 256,
-			.writer	= 16,
+			.name		= "256 readers and 16 writers",
+			.dev		= "sem0",
+			.readers	= 256,
+			.writers	= 16,
 		},
 		{.name = NULL},
 	};
