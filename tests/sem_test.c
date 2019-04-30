@@ -78,7 +78,7 @@ static void tester(const struct test *restrict t)
 	int fail = 0;
 	long val;
 
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lock_nr", t->dev);
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
 		goto perr;
 	val = strtol(path, NULL, 10);
@@ -87,8 +87,8 @@ static void tester(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
-	memset(rid, 0, sizeof(pthread_t)*t->readers);
-	memset(wid, 0, sizeof(pthread_t)*t->writers);
+	memset(rids, 0, sizeof(pthread_t)*t->readers);
+	memset(wids, 0, sizeof(pthread_t)*t->writers);
 	for (i = 0; i < t->readers; i++) {
 		err = pthread_create(&rids[i], NULL, reader, (void *)t);
 		if (err) {
@@ -107,7 +107,7 @@ static void tester(const struct test *restrict t)
 	}
 join:
 	for (i = 0; i < t->readers; i++) {
-		if (!rid[i])
+		if (!rids[i])
 			continue;
 		err = pthread_join(rids[i], (void **)&retp);
 		if (err) {
@@ -118,7 +118,7 @@ join:
 			fail++;
 	}
 	for (i = 0; i < t->writers; i++) {
-		if (!wid[i])
+		if (!wids[i])
 			continue;
 		err = pthread_join(wids[i], (void **)&retp);
 		if (err) {
@@ -128,7 +128,7 @@ join:
 		if (retp != (int *)EXIT_SUCCESS)
 			fail++;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lock_nr", t->dev);
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
 		goto perr;
 	val = strtol(path, NULL, 10);

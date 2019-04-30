@@ -15,8 +15,8 @@
 #include <linux/semaphore.h>
 
 struct sem_device {
+	atomic_t		lockers;
 	struct semaphore	lock;
-	atomic_t		lock_nr;
 	struct miscdevice	base;
 };
 
@@ -37,18 +37,18 @@ static int open(struct inode *ip, struct file *fp)
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
 	const struct sem_driver *const drv = &sem_driver;
 	struct miscdevice *misc = fp->private_data;
-	int lock_nr;
+	int lockers;
 
 	printk(KERN_DEBUG "[%s:%d]: semaphore aquiring...\n",
 	       dev_name(misc->this_device), task_pid_nr(current));
 	if (down_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	lock_nr = atomic_inc_return(&dev->lock_nr);
-	if (lock_nr > drv->default_sem_count) {
-		printk(KERN_CRIT "[%s:%d]: lock_nr=%d > default_sem_count=%d\n",
+	lockers = atomic_inc_return(&dev->lockers);
+	if (lockers > drv->default_sem_count) {
+		printk(KERN_CRIT "[%s:%d]: lockers=%d > default_sem_count=%d\n",
 		       dev_name(misc->this_device), task_pid_nr(current),
-		       lock_nr, drv->default_sem_count);
-		atomic_dec(&dev->lock_nr);
+		       lockers, drv->default_sem_count);
+		atomic_dec(&dev->lockers);
 		up(&dev->lock);
 		return -EINVAL;
 	}
@@ -61,15 +61,15 @@ static int release(struct inode *ip, struct file *fp)
 {
 	struct sem_device *dev = container_of(fp->private_data, struct sem_device, base);
 	struct miscdevice *misc = fp->private_data;
-	int lock_nr;
+	int lockers;
 
 	printk(KERN_DEBUG "[%s:%d]: semaphre releasing...\n",
 	       dev_name(misc->this_device), task_pid_nr(current));
-	lock_nr = atomic_dec_return(&dev->lock_nr);
-	if (lock_nr < 0) {
-		printk(KERN_CRIT "[%s:%d]: lock_nr(%d) < 0\n",
+	lockers = atomic_dec_return(&dev->lockers);
+	if (lockers < 0) {
+		printk(KERN_CRIT "[%s:%d]: lockers(%d) < 0\n",
 		       dev_name(misc->this_device), task_pid_nr(current),
-		       lock_nr);
+		       lockers);
 		return -EINVAL;
 	}
 	up(&dev->lock);
@@ -78,16 +78,16 @@ static int release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
-static ssize_t lock_nr_show(struct device *base, struct device_attribute *attr,
+static ssize_t lockers_show(struct device *base, struct device_attribute *attr,
 			    char *page)
 {
 	struct sem_device *dev = container_of(dev_get_drvdata(base), struct sem_device, base);
-	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->lock_nr));
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->lockers));
 }
-static DEVICE_ATTR_RO(lock_nr);
+static DEVICE_ATTR_RO(lockers);
 
 static struct attribute *sem_attrs[] = {
-	&dev_attr_lock_nr.attr,
+	&dev_attr_lockers.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(sem);
@@ -118,7 +118,7 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct sem_device));
-		atomic_set(&dev->lock_nr, 0);
+		atomic_set(&dev->lockers, 0);
 		sema_init(&dev->lock, drv->default_sem_count);
 		dev->base.name		= name;
 		dev->base.fops		= &drv->fops;
