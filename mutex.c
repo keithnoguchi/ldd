@@ -6,8 +6,13 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/atomic.h>
+#include <linux/sched.h>
+#include <linux/mutex.h>
 
 struct mutex_device {
+	atomic_t		locker;
+	struct mutex		lock;
 	struct miscdevice	base;
 };
 
@@ -22,11 +27,40 @@ static struct mutex_driver {
 
 static int open(struct inode *ip, struct file *fp)
 {
+	struct mutex_device *dev = container_of(fp->private_data,
+						struct mutex_device, base);
+	struct miscdevice *misc = fp->private_data;
+	int locker;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	locker = atomic_inc_return(&dev->locker);
+	if (locker != 1) {
+		printk(KERN_CRIT "[%s:%d]: lock is held by other task: %d!=1\n",
+		       dev_name(misc->this_device), task_pid_nr(current),
+		       locker);
+		mutex_unlock(&dev->lock);
+		return -EINVAL;
+	}
 	return 0;
 }
 
 static int release(struct inode *ip, struct file *fp)
 {
+	struct mutex_device *dev = container_of(fp->private_data,
+						struct mutex_device, base);
+	struct miscdevice *misc = fp->private_data;
+	int locker;
+
+	/* lock should be held by this process */
+	locker = atomic_dec_return(&dev->locker);
+	mutex_unlock(&dev->lock);
+	if (locker) {
+		printk(KERN_CRIT "[%s:%d] lock is not held by this task: %d!=0\n",
+		       dev_name(misc->this_device), task_pid_nr(current),
+		       locker);
+		return -EINVAL;
+	}
 	return 0;
 }
 
