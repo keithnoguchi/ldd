@@ -185,16 +185,16 @@ err:
 static int __init init(void)
 {
 	struct seq_driver *drv = &seq_driver;
-	int i, j, nr = ARRAY_SIZE(drv->devs);
-	char name[5]; /* sizeof(drv->base.name)+2 */
+	struct seq_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct seq_device *dev;
-	int err;
+	char name[5]; /* sizeof(drv->base.name)+2 */
+	int i, err;
 
 	init_driver(drv);
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err < 0) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		mutex_init(&dev->lock);
@@ -206,18 +206,16 @@ static int __init init(void)
 		dev->base.minor	= MISC_DYNAMIC_MINOR;
 		err = misc_register(&dev->base);
 		if (err) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 	}
 	err = init_proc(drv);
-	if (err) {
-		j = nr;
+	if (err)
 		goto err;
-	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (dev = drv->devs; dev < end; dev++)
 		misc_deregister(&dev->base);
 	return err;
 }
@@ -226,12 +224,12 @@ module_init(init);
 static void __exit term(void)
 {
 	struct seq_driver *drv = &seq_driver;
-	int i, nr = ARRAY_SIZE(drv->devs);
+	struct seq_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct seq_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
-		kfree(dev->data);
+	for (dev = drv->devs; dev < end; dev++) {
 		misc_deregister(&dev->base);
+		kfree(dev->data);
 	}
 	proc_remove(drv->top);
 }
