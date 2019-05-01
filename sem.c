@@ -103,18 +103,18 @@ static int __init init_driver(struct sem_driver *drv)
 static int __init init(void)
 {
 	struct sem_driver *drv = &sem_driver;
-	int i, j, nr = ARRAY_SIZE(drv->devs);
+	struct sem_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct sem_device *dev;
 	char name[5]; /* sizeof(drv->base.name)+2 */
-	int err;
+	int i, err;
 
 	err = init_driver(drv);
 	if (err)
 		return err;
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err < 0) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct sem_device));
@@ -126,13 +126,13 @@ static int __init init(void)
 		dev->base.groups	= sem_groups;
 		err = misc_register(&dev->base);
 		if (err) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++)
+	for (dev = drv->devs; dev < end; dev++)
 		misc_deregister(&dev->base);
 	return err;
 }
@@ -141,10 +141,10 @@ module_init(init);
 static void __exit term(void)
 {
 	struct sem_driver *drv = &sem_driver;
-	int i, nr = ARRAY_SIZE(drv->devs);
+	struct sem_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct sem_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, drv++)
+	for (dev = drv->devs; dev < end; dev++)
 		misc_deregister(&dev->base);
 }
 module_exit(term);
