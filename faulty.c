@@ -43,16 +43,16 @@ static void __init init_driver(struct faulty_driver *drv)
 static int __init init(void)
 {
 	struct faulty_driver *drv = &faulty_driver;
-	int i, j, nr = ARRAY_SIZE(drv->devs);
+	struct faulty_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct faulty_device *dev;
 	char name[8]; /* sizeof(drv->base.name)+2 */
-	int err;
+	int i, err;
 
 	init_driver(drv);
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err < 0) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		dev->base.name	= name;
@@ -60,13 +60,13 @@ static int __init init(void)
 		dev->base.minor	= MISC_DYNAMIC_MINOR;
 		err = misc_register(&dev->base);
 		if (err) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++)
+	for (dev = drv->devs; dev < end; dev++)
 		misc_deregister(&dev->base);
 	return err;
 }
@@ -75,9 +75,10 @@ module_init(init);
 static void __exit term(void)
 {
 	struct faulty_driver *drv = &faulty_driver;
-	int i, nr = ARRAY_SIZE(drv->devs);
+	struct faulty_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct faulty_device *dev;
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++)
+
+	for (dev = drv->devs; dev < end; dev++)
 		misc_deregister(&dev->base);
 }
 module_exit(term);
