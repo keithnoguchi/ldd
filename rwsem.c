@@ -30,7 +30,8 @@ static struct rwsem_driver {
 
 static int open(struct inode *ip, struct file *fp)
 {
-	struct rwsem_device *dev = container_of(fp->private_data, struct rwsem_device, base);
+	struct rwsem_device *dev = container_of(fp->private_data,
+						struct rwsem_device, base);
 	struct miscdevice *misc = fp->private_data;
 	int (*down)(struct rw_semaphore *);
 	atomic_t *counter;
@@ -56,7 +57,8 @@ static int open(struct inode *ip, struct file *fp)
 
 static int release(struct inode *ip, struct file *fp)
 {
-	struct rwsem_device *dev = container_of(fp->private_data, struct rwsem_device, base);
+	struct rwsem_device *dev = container_of(fp->private_data,
+						struct rwsem_device, base);
 	struct miscdevice *misc = fp->private_data;
 	void (*up)(struct rw_semaphore *);
 	atomic_t *counter;
@@ -172,4 +174,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("<linux/rwsem.h> example");
+MODULE_DESCRIPTION("R/W semaphores example");

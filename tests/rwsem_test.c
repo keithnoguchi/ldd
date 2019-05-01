@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <time.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -17,12 +18,21 @@ struct test {
 	const char	*const dev;
 	unsigned int	readers;
 	unsigned int	writers;
+	pthread_mutex_t	lock;
+	pthread_cond_t	cond;
+	int		start;
 };
 
-static void *test(const struct test *restrict t, int flags)
+static void *test(struct test *t, int flags)
 {
 	char path[PATH_MAX];
 	int err, fd;
+
+	/* wait for the start */
+	pthread_mutex_lock(&t->lock);
+	while (!t->start)
+		pthread_cond_wait(&t->cond, &t->lock);
+	pthread_mutex_unlock(&t->lock);
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
@@ -30,6 +40,11 @@ static void *test(const struct test *restrict t, int flags)
 	fd = open(path, flags);
 	if (fd == -1)
 		goto perr;
+	err = pthread_yield();
+	if (err) {
+		errno = err;
+		goto perr;
+	}
 	if (close(fd) == -1)
 		goto perr;
 	return (void *)EXIT_SUCCESS;
@@ -48,15 +63,15 @@ static void *writer(void *arg)
 	return test(arg, O_WRONLY);
 }
 
-static void tester(const struct test *restrict t)
+static void tester(struct test *t)
 {
 	pthread_t rids[t->readers];
 	pthread_t wids[t->writers];
 	char buf[BUFSIZ], path[PATH_MAX];
+	long val, readers, writers;
 	int i, err, fail = 0;
 	void *retp;
 	FILE *fp;
-	long val;
 
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
 		       t->dev);
@@ -76,6 +91,7 @@ static void tester(const struct test *restrict t)
 	}
 	memset(rids, 0, sizeof(pthread_t)*t->readers);
 	memset(wids, 0, sizeof(pthread_t)*t->writers);
+	t->start = 0;
 	for (i = 0; i < t->readers; i++) {
 		err = pthread_create(&rids[i], NULL, reader, (void *)t);
 		if (err) {
@@ -94,6 +110,48 @@ static void tester(const struct test *restrict t)
 			goto join;
 		}
 	}
+	/* light the fire */
+	pthread_mutex_lock(&t->lock);
+	t->start = 1;
+	pthread_mutex_unlock(&t->lock);
+	pthread_cond_broadcast(&t->cond);
+	pthread_yield();
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+		       t->dev);
+	if (err < 0) {
+		fail++;
+		goto join;
+	}
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		fail++;
+		goto join;
+	}
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp)) {
+		fail++;
+		goto join;
+	}
+	readers = strtol(buf, NULL, 10);
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
+		       t->dev);
+	if (err < 0) {
+		fail++;
+		goto join;
+	}
+	fp = fopen(path, "r");
+	if (fp == NULL) {
+		fail++;
+		goto join;
+	}
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp)) {
+		fail++;
+		goto join;
+	}
+	writers = strtol(buf, NULL, 10);
+	fprintf(stdout, "%s:\n\treaders: %ld\n\twriters: %ld\n",
+		t->name, readers, writers);
 join:
 	for (i = 0; i < t->readers; i++) {
 		if (!rids[i])
@@ -238,7 +296,7 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			tester(t);
+			tester((struct test *)t);
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)
 			goto perr;
