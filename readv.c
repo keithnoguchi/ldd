@@ -115,20 +115,21 @@ static void __init init_driver(struct readv_driver *drv)
 static int __init init(void)
 {
 	struct readv_driver *drv = &readv_driver;
-	int i, j, nr = ARRAY_SIZE(drv->devs);
-	char name[7]; /* 10 devices */
+	struct readv_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct readv_device *dev;
-	int err;
+	char name[7]; /* 10 devices */
+	int i, err;
 
-	err = alloc_chrdev_region(&drv->devt, 0, nr, drv->base.name);
+	err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),
+				  drv->base.name);
 	if (err)
 		return err;
 
 	init_driver(drv);
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err < 0) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct readv_device));
@@ -141,22 +142,22 @@ static int __init init(void)
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		err = device_create_file(&dev->base, &dev_attr_size);
 		if (err) {
-			j = i++;
+			end = dev+1;
 			goto err;
 		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+	for (dev = drv->devs; dev < end; dev++) {
 		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
 	}
-	unregister_chrdev_region(drv->devt, nr);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
 module_init(init);
@@ -164,14 +165,14 @@ module_init(init);
 static void __exit term(void)
 {
 	struct readv_driver *drv = &readv_driver;
-	int i, nr = ARRAY_SIZE(drv->devs);
+	struct readv_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct readv_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs; dev < end; dev++) {
 		device_remove_file(&dev->base, &dev_attr_size);
 		cdev_device_del(&dev->cdev, &dev->base);
 	}
-	unregister_chrdev_region(drv->devt, nr);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
 
