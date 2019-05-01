@@ -4,9 +4,9 @@
 
 [LDD] in action!
 
-## Drivers
+## Drivers/Modules
 
-### Character device drivers
+### Character Device Drivers
 
 - [open.c](open.c): open(2) and close(2) sample driver
   - [open_test.c](tests/open_test.c): open.c unit test
@@ -21,20 +21,20 @@
 - [scull.c](scull.c): Simple Character Utility for Loading Localities driver
   - [scull_test.c](tests/scull_test.c): scull.c unit test
 
-### Debugging primitive drivers
+### Debugging Primitive Test Modules
 
-- [proc.c](proc.c): /proc file sample driver
+- [proc.c](proc.c): <linux/proc_fs.h> test module
   - [proc_test.c](tests/proc_test.c): proc.c unit test
-- [seq.c](seq.c): <linux/seq_file.h> sample driver
+- [seq.c](seq.c): <linux/seq_file.h> test module
   - [seq_test.c](tests/seq_file.c): seq.c unit test
-- [faulty.c](faulty.c): Kernel Oops sample driver
+- [faulty.c](faulty.c): Kernel Oops test module
   - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
 
-### Concurrency primitive drivers
+### Concurrency Primitive Test Modules
 
-- [sem.c](sem.c): <linux/semaphore.h> sample driver
+- [sem.c](sem.c): <linux/semaphore.h> test module
   - [sem_test.c](tests/sem_test.c): sem.c unit test
-- [rwsem.c](rwsem.c): <linux/rwsem.h> sample driver
+- [rwsem.c](rwsem.c): <linux/rwsem.h> test module
   - [rwsem_test.c](tests/rwsem_test.c): rwsem.c unit test
 
 ## Build

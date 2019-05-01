@@ -173,4 +173,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("R/W semaphores example");
+MODULE_DESCRIPTION("R/W semaphores test module");

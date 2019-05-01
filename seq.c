@@ -237,4 +237,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("<linux/seq_file.h> example");
+MODULE_DESCRIPTION("<linux/seq_file.h> test module");

@@ -84,4 +84,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Mutex example driver");
+MODULE_DESCRIPTION("Mutex test module");

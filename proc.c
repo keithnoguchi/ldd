@@ -59,4 +59,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("/proc sample driver");
+MODULE_DESCRIPTION("/proc test module");

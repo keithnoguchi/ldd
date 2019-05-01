@@ -151,4 +151,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Semaphore example driver");
+MODULE_DESCRIPTION("Semaphore test module");

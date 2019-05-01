@@ -85,4 +85,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Oops example");
+MODULE_DESCRIPTION("Oops test module");
