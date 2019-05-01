@@ -29,8 +29,8 @@ struct readv_driver {
 	struct readv_device	devs[4];
 } readv_driver = {
 	.default_size	= PAGE_SIZE,
-	.base.owner	= THIS_MODULE,
 	.base.name	= "readv",
+	.base.owner	= THIS_MODULE,
 };
 module_param_named(default_size, readv_driver.default_size, ulong, 0444);
 

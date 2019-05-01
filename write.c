@@ -23,8 +23,8 @@ static struct write_driver {
 	struct device_driver	base;
 	struct write_device	devs[1000]; /* 1000 devices!? */
 } write_driver = {
-	.base.owner	= THIS_MODULE,
 	.base.name	= "write",
+	.base.owner	= THIS_MODULE,
 };
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)

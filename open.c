@@ -22,8 +22,8 @@ static struct open_driver {
 	struct device_driver	base;
 	struct open_device	devs[1000]; /* 1000 devices!? */
 } open_driver = {
-	.base.owner	= THIS_MODULE,
 	.base.name	= "open",
+	.base.owner	= THIS_MODULE,
 };
 
 static int open(struct inode *ip, struct file *fp)

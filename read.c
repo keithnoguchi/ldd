@@ -27,8 +27,8 @@ static struct read_driver {
 	struct read_device	devs[1000]; /* 1000 devices!? */
 } read_driver = {
 	.default_size	= PAGE_SIZE,
-	.base.owner	= THIS_MODULE,
 	.base.name	= "read",
+	.base.owner	= THIS_MODULE,
 };
 module_param_named(default_size, read_driver.default_size, ulong, 0444);
 

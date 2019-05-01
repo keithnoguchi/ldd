@@ -23,8 +23,8 @@ static struct writev_driver {
 	struct device_driver	base;
 	struct writev_device	devs[4]; /* 4 device nodes */
 } writev_driver = {
-	.base.owner	= THIS_MODULE,
 	.base.name	= "writev",
+	.base.owner	= THIS_MODULE,
 };
 
 static ssize_t write_iter(struct kiocb *cb, struct iov_iter *iter)

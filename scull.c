@@ -38,8 +38,8 @@ static struct scull_driver {
 } scull_driver = {
 	.default_qset		= 1024,
 	.default_quantum	= PAGE_SIZE,
-	.base.owner		= THIS_MODULE,
 	.base.name		= "scull",
+	.base.owner		= THIS_MODULE,
 };
 
 static struct scull_qset *scull_follow(struct scull_device *dev, loff_t pos)
