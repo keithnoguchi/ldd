@@ -60,47 +60,48 @@ static void __init init_driver(struct open_driver *drv)
 static int __init init(void)
 {
 	struct open_driver *drv = &open_driver;
-	int i, j, nr = ARRAY_SIZE(drv->devs);
+	struct open_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct open_device *dev;
 	char name[8]; /* for 1000 devices */
-	int err;
+	int i, err;
 
-	err = alloc_chrdev_region(&drv->devt, 0, nr, drv->base.name);
+	err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),
+				  drv->base.name);
 	if (err)
 		return err;
 
 	init_driver(drv);
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
 		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
 		if (err <= 0) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct open_device));
 		atomic_set(&dev->open_nr, 0);
 		cdev_init(&dev->cdev, &drv->fops);
-		dev->cdev.owner = THIS_MODULE;
+		dev->cdev.owner	= THIS_MODULE;
 		device_initialize(&dev->base);
 		dev->base.init_name = name;
 		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
-			j = i;
+			end = dev;
 			goto err;
 		}
 		err = device_create_file(&dev->base, &dev_attr_open_nr);
 		if (err) {
-			j = i+1;
+			end = dev+1;
 			goto err;
 		}
 	}
 	return 0;
 err:
-	for (i = 0, dev = drv->devs; i < j; i++, dev++) {
+	for (dev = drv->devs; dev < end; dev++) {
 		device_remove_file(&dev->base, &dev_attr_open_nr);
 		cdev_device_del(&dev->cdev, &dev->base);
 	}
-	unregister_chrdev_region(drv->devt, nr);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
 module_init(init);
@@ -108,17 +109,17 @@ module_init(init);
 static void __exit term(void)
 {
 	struct open_driver *drv = &open_driver;
-	int i, nr = ARRAY_SIZE(drv->devs);
+	struct open_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct open_device *dev;
 
-	for (i = 0, dev = drv->devs; i < nr; i++, dev++) {
+	for (dev = drv->devs; dev < end; dev++) {
 		device_remove_file(&dev->base, &dev_attr_open_nr);
 		cdev_device_del(&dev->cdev, &dev->base);
 	}
-	unregister_chrdev_region(drv->devt, nr);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("open(2) and close(2) example");
+MODULE_DESCRIPTION("open(2) and close(2) example module");
