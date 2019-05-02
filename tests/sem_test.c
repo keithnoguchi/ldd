@@ -87,8 +87,8 @@ static void tester(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
-	memset(rids, 0, sizeof(pthread_t)*t->readers);
-	memset(wids, 0, sizeof(pthread_t)*t->writers);
+	memset(rids, 0, sizeof(rids));
+	memset(wids, 0, sizeof(wids));
 	for (i = 0; i < t->readers; i++) {
 		err = pthread_create(&rids[i], NULL, reader, (void *)t);
 		if (err) {

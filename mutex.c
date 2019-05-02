@@ -6,13 +6,12 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
-#include <linux/atomic.h>
 #include <linux/sched.h>
 #include <linux/mutex.h>
 
 struct mutex_device {
-	atomic_t		locker;
 	struct mutex		lock;
+	int			lockers;
 	struct miscdevice	base;
 };
 
@@ -29,19 +28,18 @@ static int open(struct inode *ip, struct file *fp)
 {
 	struct mutex_device *dev = container_of(fp->private_data,
 						struct mutex_device, base);
-	struct miscdevice *misc = fp->private_data;
-	int locker;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	locker = atomic_inc_return(&dev->locker);
-	if (locker != 1) {
+	if (dev->lockers != 0) {
+		struct miscdevice *misc = fp->private_data;
 		printk(KERN_CRIT "[%s:%d]: lock is held by other task: %d!=1\n",
 		       dev_name(misc->this_device), task_pid_nr(current),
-		       locker);
+		       dev->lockers);
 		mutex_unlock(&dev->lock);
 		return -EINVAL;
 	}
+	dev->lockers++;
 	return 0;
 }
 
@@ -49,20 +47,41 @@ static int release(struct inode *ip, struct file *fp)
 {
 	struct mutex_device *dev = container_of(fp->private_data,
 						struct mutex_device, base);
-	struct miscdevice *misc = fp->private_data;
-	int locker;
+	int lockers;
 
-	/* lock should be held by this process */
-	locker = atomic_dec_return(&dev->locker);
+	lockers = --dev->lockers;
 	mutex_unlock(&dev->lock);
-	if (locker) {
-		printk(KERN_CRIT "[%s:%d] lock is not held by this task: %d!=0\n",
+	/* lock counter should be zero */
+	if (lockers != 0) {
+		struct miscdevice *misc = fp->private_data;
+		printk(KERN_CRIT "[%s:%d] lock is held by other tasks: %d!=0\n",
 		       dev_name(misc->this_device), task_pid_nr(current),
-		       locker);
+		       lockers);
 		return -EINVAL;
 	}
 	return 0;
 }
+
+static ssize_t lockers_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct mutex_device *dev = container_of(dev_get_drvdata(base),
+						struct mutex_device, base);
+	int lockers;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	lockers = dev->lockers;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%d\n", lockers);
+}
+static DEVICE_ATTR_RO(lockers);
+
+static struct attribute *mutex_attrs[] = {
+	&dev_attr_lockers.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(mutex);
 
 static void __init init_driver(struct mutex_driver *drv)
 {
@@ -88,9 +107,11 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct mutex_device));
-		dev->base.name	= name;
-		dev->base.fops	= &drv->fops;
-		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		mutex_init(&dev->lock);
+		dev->base.name		= name;
+		dev->base.fops		= &drv->fops;
+		dev->base.minor		= MISC_DYNAMIC_MINOR;
+		dev->base.groups	= mutex_groups;
 		err = misc_register(&dev->base);
 		if (err) {
 			end = dev;
