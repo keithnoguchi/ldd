@@ -17,15 +17,24 @@ struct test {
 	const char	*const dev;
 	unsigned int	readers;
 	unsigned int	writers;
+	pthread_mutex_t	lock;
+	pthread_cond_t	cond;
+	int		start;
 };
 
-static void *test(const struct test *restrict t, int flags)
+static void *test(struct test *t, int flags)
 {
 	char path[PATH_MAX];
 	char buf[BUFSIZ];
 	FILE *fp;
 	int err, fd;
 	long val;
+
+	/* wait for the start */
+	pthread_mutex_lock(&t->lock);
+	while (!t->start)
+		pthread_cond_wait(&t->cond, &t->lock);
+	pthread_mutex_unlock(&t->lock);
 
 	err = snprintf(path, sizeof(path), "/sys/module/sem/parameters/default_sem_count");
 	if (err < 0)
@@ -69,24 +78,44 @@ static void *writer(void *arg)
 	return test(arg, O_WRONLY);
 }
 
-static void tester(const struct test *restrict t)
+static void tester(struct test *t)
 {
 	pthread_t rids[t->readers];
 	pthread_t wids[t->writers];
-	char path[PATH_MAX];
-	int i, err, *retp;
+	char buf[LINE_MAX], path[PATH_MAX];
 	int fail = 0;
+	int i, err, *retp;
+	FILE *fp;
 	long val;
 
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
 		goto perr;
-	val = strtol(path, NULL, 10);
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
 	if (val != 0) {
 		fprintf(stderr, "%s: unexpected beginning lock count:\n\t- want: 0\n\t-  got: %ld\n",
 			t->name, val);
 		goto err;
 	}
+	err = pthread_mutex_init(&t->lock, NULL);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_cond_init(&t->cond, NULL);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	t->start = 0;
 	memset(rids, 0, sizeof(rids));
 	memset(wids, 0, sizeof(wids));
 	for (i = 0; i < t->readers; i++) {
@@ -105,6 +134,36 @@ static void tester(const struct test *restrict t)
 			goto join;
 		}
 	}
+	err = pthread_mutex_lock(&t->lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	t->start = 1;
+	err = pthread_mutex_unlock(&t->lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_cond_broadcast(&t->cond);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (fp == NULL)
+		goto perr;
+	fread(buf, sizeof(buf), 1, fp);
+	if (ferror(fp))
+		goto perr;
+	if (fclose(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	fprintf(stdout, "%s:\n\tlockers: %ld\n", t->name, val);
+	fflush(stdout);
 join:
 	for (i = 0; i < t->readers; i++) {
 		if (!rids[i])
@@ -131,7 +190,15 @@ join:
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
 		goto perr;
-	val = strtol(path, NULL, 10);
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp))
+		goto perr;
+	val = strtol(buf, NULL, 10);
 	if (val != 0) {
 		fprintf(stderr, "%s: unexpected ending lock count:\n\t- want: 0\n\t-  got: %ld\n",
 			t->name, val);
@@ -238,7 +305,7 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			tester(t);
+			tester((struct test *)t);
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)
 			goto perr;

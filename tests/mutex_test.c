@@ -14,11 +14,11 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	unsigned int	readers;
+	unsigned int	writers;
 	pthread_mutex_t	lock;
 	pthread_cond_t	cond;
 	int		start;
-	unsigned int	readers;
-	unsigned int	writers;
 };
 
 static void *test(struct test *t, int flags)
