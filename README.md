@@ -36,6 +36,8 @@
   - [sem_test.c](tests/sem_test.c): sem.c unit test
 - [rwsem.c](rwsem.c): <linux/rwsem.h> test module
   - [rwsem_test.c](tests/rwsem_test.c): rwsem.c unit test
+- [mutex.c](mutex.c): <linux/mutex.h> test module
+  - [mutex_test.c](tests/mutex_test.c): mutex.c unit test
 
 ## Build
 
