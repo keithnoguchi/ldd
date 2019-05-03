@@ -80,8 +80,10 @@ static void tester(struct test *t)
 	fp = fopen(path, "r");
 	if (fp == NULL)
 		goto perr;
-	fread(buf, sizeof(buf), 1, fp);
-	if (ferror(fp))
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp))
 		goto perr;
 	val = strtol(buf, NULL, 10);
 	if (val != 0) {
@@ -111,11 +113,27 @@ static void tester(struct test *t)
 		}
 	}
 	/* light the fire */
-	pthread_mutex_lock(&t->lock);
+	err = pthread_mutex_lock(&t->lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
 	t->start = 1;
-	pthread_mutex_unlock(&t->lock);
-	pthread_cond_broadcast(&t->cond);
-	pthread_yield();
+	err = pthread_mutex_unlock(&t->lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_cond_broadcast(&t->cond);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_yield();
+	if (err) {
+		errno = err;
+		goto perr;
+	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
 		       t->dev);
 	if (err < 0) {

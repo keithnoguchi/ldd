@@ -100,9 +100,9 @@ static void tester(struct test *t)
 		errno = err;
 		goto perr;
 	}
-	t->start = 0;
 	memset(readers, 0, sizeof(readers));
 	memset(writers, 0, sizeof(writers));
+	t->start = 0;
 	for (i = 0; i < t->readers; i++) {
 		err = pthread_create(&readers[i], NULL, reader, (void *)t);
 		if (err) {
@@ -122,15 +122,26 @@ static void tester(struct test *t)
 		}
 	}
 	err = pthread_mutex_lock(&t->lock);
-	if (err)
+	if (err) {
+		errno = err;
 		goto perr;
+	}
 	t->start = 1;
 	err = pthread_mutex_unlock(&t->lock);
-	if (err)
+	if (err) {
+		errno = err;
 		goto perr;
+	}
 	err = pthread_cond_broadcast(&t->cond);
-	if (err)
+	if (err) {
+		errno = err;
 		goto perr;
+	}
+	err = pthread_yield();
+	if (err) {
+		errno = err;
+		goto perr;
+	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0) {
 		goto perr;

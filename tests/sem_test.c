@@ -115,9 +115,9 @@ static void tester(struct test *t)
 		errno = err;
 		goto perr;
 	}
-	t->start = 0;
 	memset(rids, 0, sizeof(rids));
 	memset(wids, 0, sizeof(wids));
+	t->start = 0;
 	for (i = 0; i < t->readers; i++) {
 		err = pthread_create(&rids[i], NULL, reader, (void *)t);
 		if (err) {
@@ -146,6 +146,11 @@ static void tester(struct test *t)
 		goto perr;
 	}
 	err = pthread_cond_broadcast(&t->cond);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_yield();
 	if (err) {
 		errno = err;
 		goto perr;
