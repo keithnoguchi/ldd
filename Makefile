@@ -4,6 +4,7 @@ MODS  += read
 MODS  += write
 MODS  += readv
 MODS  += writev
+MODS  += append
 MODS  += scull
 MODS  += proc
 MODS  += seq
