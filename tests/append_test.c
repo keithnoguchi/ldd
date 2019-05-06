@@ -14,12 +14,15 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	int		flags;
+	int		writen;
+	int		readn;
 };
 
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
-	int err, fd;
+	char buf[BUFSIZ];
+	int i, err, fd;
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
@@ -27,11 +30,28 @@ static void test(const struct test *restrict t)
 	fd = open(path, t->flags);
 	if (fd == -1)
 		goto perr;
+	for (i = 0; i < t->writen; i++) {
+		err = write(fd, buf, sizeof(buf));
+		if (err == -1) {
+			fprintf(stderr, "%s: write: %s\n",
+				t->name, strerror(errno));
+			goto err;
+		}
+	}
+	for (i = 0; i < t->readn; i++) {
+		err = read(fd, buf, sizeof(buf));
+		if (err == -1) {
+			fprintf(stderr, "%s: read: %s\n",
+				t->name, strerror(errno));
+			goto err;
+		}
+	}
 	if (close(fd))
 		goto perr;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
+err:
 	exit(EXIT_FAILURE);
 }
 
@@ -41,22 +61,30 @@ int main(void)
 		{
 			.name	= "open append0 with no flags",
 			.dev	= "append0",
-			.flags	= 0,
+			.flags	= O_RDWR,
+			.writen	= 1,
+			.readn	= 1,
 		},
 		{
 			.name	= "open append1 with O_APPEND",
 			.dev	= "append1",
-			.flags	= O_APPEND,
+			.flags	= O_RDWR|O_APPEND,
+			.writen	= 1,
+			.readn	= 1,
 		},
 		{
 			.name	= "open append2 with O_TRUNC",
 			.dev	= "append2",
-			.flags	= O_CREAT,
+			.flags	= O_RDWR|O_CREAT,
+			.writen	= 1,
+			.readn	= 1,
 		},
 		{
 			.name	= "open append3 with O_APPEND|O_TRUNC",
 			.dev	= "append3",
-			.flags	= O_CREAT|O_APPEND,
+			.flags	= O_RDWR|O_CREAT|O_APPEND,
+			.writen	= 1,
+			.readn	= 1,
 		},
 		{.name = NULL},
 	};
