@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -9,16 +12,52 @@
 
 struct test {
 	const char	*const name;
+	const char	*const dev;
+	int		flags;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	int err, fd;
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, t->flags);
+	if (fd == -1)
+		goto perr;
+	if (close(fd))
+		goto perr;
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "open append0 with no flags",
+			.dev	= "append0",
+			.flags	= 0,
+		},
+		{
+			.name	= "open append1 with O_APPEND",
+			.dev	= "append1",
+			.flags	= O_APPEND,
+		},
+		{
+			.name	= "open append2 with O_TRUNC",
+			.dev	= "append2",
+			.flags	= O_CREAT,
+		},
+		{
+			.name	= "open append3 with O_APPEND|O_TRUNC",
+			.dev	= "append3",
+			.flags	= O_CREAT|O_APPEND,
+		},
 		{.name = NULL},
 	};
 
