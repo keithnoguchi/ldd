@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
+#include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -11,16 +14,51 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	unsigned int	waiter;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	int err, fd;
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_RDWR);
+	if (fd == -1)
+		goto perr;
+	if (close(fd) == -1)
+		goto perr;
+	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
 	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "single completion waiter",
+			.dev	= "comp0",
+			.waiter	= 1,
+		},
+		{
+			.name	= "two completion waiters",
+			.dev	= "comp1",
+			.waiter	= 2,
+		},
+		{
+			.name	= "three completion waiters",
+			.dev	= "comp2",
+			.waiter	= 3,
+		},
+		{
+			.name	= "four completion waiters",
+			.dev	= "comp3",
+			.waiter	= 4,
+		},
 		{.name = NULL},
 	};
 
