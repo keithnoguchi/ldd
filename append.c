@@ -7,11 +7,18 @@
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
+#include <linux/err.h>
+#include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
+#include <linux/uaccess.h>
+#include <linux/sysfs.h>
 
 struct append_device {
 	struct mutex	lock;
+	size_t		size;
+	size_t		alloc;
+	void		*data;
 	struct cdev	cdev;
 	struct device	base;
 };
@@ -29,25 +36,85 @@ static struct append_driver {
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct append_device *dev = fp->private_data;
+	char *data = dev->data;
+	ssize_t len;
 
+	printk(KERN_DEBUG "[%s:%d] read(buf=%p,count=%ld,*pos=%lld)\n",
+	       dev_name(&dev->base), task_pid_nr(current), buf, count, *pos);
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	printk(KERN_DEBUG "[%s:%d] read(buf=%p,count=%ld)\n",
-	       dev_name(&dev->base), task_pid_nr(current), buf, count);
+	len = 0;
+	if (count == 0 || *pos >= dev->size)
+		goto out;
+	if (*pos+count > dev->size)
+		count = dev->size-*pos;
+	data += *pos;
+	len = count;
+	do {
+		unsigned long rem = copy_to_user(buf, data, len);
+		if (!rem)
+			break;
+		data += len-rem;
+		buf += len-rem;
+		len = rem;
+	} while (len);
+	*pos += count;
+	len = count;
+out:
 	mutex_unlock(&dev->lock);
-	return 0;
+	return len;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct append_device *dev = fp->private_data;
+	char *data;
+	loff_t lpos;
+	size_t len;
 
+	printk(KERN_DEBUG "[%s:%d] write(buf=%p,count=%ld,*pos=%lld)\n",
+	       dev_name(&dev->base), task_pid_nr(current), buf, count, *pos);
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	printk(KERN_DEBUG "[%s:%d] write(buf=%p,count=%ld)\n",
-	       dev_name(&dev->base), task_pid_nr(current), buf, count);
+	len = 0;
+	if (count == 0)
+		goto out;
+	lpos = *pos;
+	if (unlikely(fp->f_flags&O_APPEND))
+		lpos = dev->size;
+	if (lpos+count > dev->alloc) {
+		size_t alloc = ((lpos+count)/PAGE_SIZE+1)*PAGE_SIZE;
+		printk(KERN_INFO "[%s:%d] kzalloc(%ld,page=%ld)\n",
+		       dev_name(&dev->base), task_pid_nr(current), alloc, PAGE_SIZE);
+		data = kzalloc(alloc, GFP_KERNEL);
+		if (IS_ERR(data)) {
+			len = PTR_ERR(data);
+			goto out;
+		}
+		if (dev->data) {
+			memcpy(data, dev->data, dev->size);
+			kfree(dev->data);
+		}
+		dev->alloc = alloc;
+		dev->data = data;
+	}
+	data = dev->data+lpos;
+	len = count;
+	do {
+		unsigned long rem = copy_from_user(data, buf, len);
+		if (!rem)
+			break;
+		data += len-rem;
+		buf += len-rem;
+		len = rem;
+	} while (len);
+	if (lpos+count > dev->size)
+		dev->size = lpos+count;
+	*pos = lpos+count;
+	len = count;
+out:
 	mutex_unlock(&dev->lock);
-	return 0;
+	return len;
 }
 
 static int open(struct inode *ip, struct file *fp)
@@ -55,14 +122,60 @@ static int open(struct inode *ip, struct file *fp)
 	struct append_device *dev = container_of(ip->i_cdev,
 						 struct append_device, cdev);
 
-	if (mutex_lock_interruptible(&dev->lock))
-		return -ERESTARTSYS;
-	fp->private_data = dev;
 	printk(KERN_DEBUG "[%s:%d] open\n", dev_name(&dev->base),
 	       task_pid_nr(current));
+	fp->private_data = dev;
+	if ((fp->f_flags&O_ACCMODE) == O_RDONLY)
+		return 0;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (fp->f_flags&O_TRUNC) {
+		if (dev->data)
+			kfree(dev->data);
+		dev->data = NULL;
+		dev->alloc = 0;
+		dev->size = 0;
+	}
 	mutex_unlock(&dev->lock);
 	return 0;
 }
+
+static ssize_t size_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct append_device *dev = container_of(base, struct append_device,
+						 base);
+	size_t size;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	size = dev->size;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", size);
+}
+static DEVICE_ATTR_RO(size);
+
+static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
+			  char *page)
+{
+	struct append_device *dev = container_of(base, struct append_device,
+						 base);
+	size_t alloc;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	alloc = dev->alloc;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", alloc);
+}
+static DEVICE_ATTR_RO(alloc);
+
+struct attribute *append_attrs[] = {
+	&dev_attr_size.attr,
+	&dev_attr_alloc.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(append);
 
 static int __init init_driver(struct append_driver *drv)
 {
@@ -97,11 +210,14 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct append_device));
-		mutex_init(&dev->lock);
-		cdev_init(&dev->cdev, &drv->fops);
+		dev->data		= NULL;
+		dev->alloc = dev->size	= 0;
+		dev->base.init_name	= name;
+		dev->base.groups	= append_groups;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
-		dev->base.init_name	= name;
+		mutex_init(&dev->lock);
+		cdev_init(&dev->cdev, &drv->fops);
 		device_initialize(&dev->base);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {

@@ -14,40 +14,90 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	int		flags;
-	int		writen;
-	int		readn;
+	int		nr;
+	size_t		size;
+	size_t		want;
+	size_t		alloc;
 };
 
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
-	char buf[BUFSIZ];
+	char *ptr, buf[t->size];
+	ssize_t len, got;
 	int i, err, fd;
+	FILE *fp;
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
 		goto perr;
-	fd = open(path, t->flags);
+	for (i = 0; i < t->nr; i++) {
+		int flags = t->flags|O_WRONLY;
+		int rem;
+
+		fd = open(path, i == 0 ? flags|O_TRUNC : flags);
+		if (fd == -1)
+			goto perr;
+		rem = t->size;
+		ptr = buf;
+		do {
+			len = write(fd, ptr, rem);
+			if (len == -1) {
+				fprintf(stderr, "%s: write: %s\n",
+					t->name, strerror(errno));
+				goto err;
+			}
+			rem -= len;
+			ptr += len;
+		} while (rem > 0);
+		if (close(fd) == -1)
+			goto perr;
+	}
+	fd = open(path, O_RDONLY);
 	if (fd == -1)
 		goto perr;
-	for (i = 0; i < t->writen; i++) {
-		err = write(fd, buf, sizeof(buf));
-		if (err == -1) {
-			fprintf(stderr, "%s: write: %s\n",
-				t->name, strerror(errno));
-			goto err;
-		}
-	}
-	for (i = 0; i < t->readn; i++) {
-		err = read(fd, buf, sizeof(buf));
-		if (err == -1) {
-			fprintf(stderr, "%s: read: %s\n",
-				t->name, strerror(errno));
-			goto err;
-		}
-	}
-	if (close(fd))
+	got = 0;
+	while ((len = read(fd, buf, sizeof(buf))) > 0)
+		got += len;
+	if (close(fd) == -1)
 		goto perr;
+	if (got != t->want) {
+		fprintf(stderr, "%s: unexpected read result:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->want, got);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/devices/%s/size", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->want) {
+		fprintf(stderr, "%s: unexpected %s value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, path, t->want, got);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->alloc) {
+		fprintf(stderr, "%s: unexpected %s value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, path, t->alloc, got);
+		goto err;
+	}
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -57,34 +107,169 @@ err:
 
 int main(void)
 {
+	long pagesize = sysconf(_SC_PAGESIZE);
 	const struct test *t, tests[] = {
 		{
-			.name	= "open append0 with no flags",
+			.name	= "signle 4095 write no O_APPEND flag",
 			.dev	= "append0",
-			.flags	= O_RDWR,
-			.writen	= 1,
-			.readn	= 1,
+			.flags	= 0,
+			.nr	= 1,
+			.size	= 4095,
+			.want	= 4095,
+			.alloc	= (4095/pagesize+1)*pagesize,
 		},
 		{
-			.name	= "open append1 with O_APPEND",
+			.name	= "single 4095 write with O_APPEND flag",
 			.dev	= "append1",
-			.flags	= O_RDWR|O_APPEND,
-			.writen	= 1,
-			.readn	= 1,
+			.flags	= O_APPEND,
+			.nr	= 1,
+			.size	= 4095,
+			.want	= 4095,
+			.alloc	= (4095/pagesize+1)*pagesize,
 		},
 		{
-			.name	= "open append2 with O_TRUNC",
+			.name	= "signle 4096 write no O_APPEND flag",
 			.dev	= "append2",
-			.flags	= O_RDWR|O_CREAT,
-			.writen	= 1,
-			.readn	= 1,
+			.flags	= 0,
+			.nr	= 1,
+			.size	= 4096,
+			.want	= 4096,
+			.alloc	= (4096/pagesize+1)*pagesize,
 		},
 		{
-			.name	= "open append3 with O_APPEND|O_TRUNC",
+			.name	= "single 4096 write with O_APPEND flag",
 			.dev	= "append3",
-			.flags	= O_RDWR|O_CREAT|O_APPEND,
-			.writen	= 1,
-			.readn	= 1,
+			.flags	= O_APPEND,
+			.nr	= 1,
+			.size	= 4096,
+			.want	= 4096,
+			.alloc	= (4096/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "signle 4097 write no O_APPEND flag",
+			.dev	= "append0",
+			.flags	= 0,
+			.nr	= 1,
+			.size	= 4097,
+			.want	= 4097,
+			.alloc	= (4097/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "single 4097 write with O_APPEND flag",
+			.dev	= "append1",
+			.flags	= O_APPEND,
+			.nr	= 1,
+			.size	= 4097,
+			.want	= 4097,
+			.alloc	= (4097/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "double 4095 writes no O_APPEND flag",
+			.dev	= "append2",
+			.flags	= 0,
+			.nr	= 2,
+			.size	= 4095,
+			.want	= 4095,
+			.alloc	= (4095/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "double 4095 writes with O_APPEND flag",
+			.dev	= "append3",
+			.flags	= O_APPEND,
+			.nr	= 2,
+			.size	= 4095,
+			.want	= 8190,
+			.alloc	= (8190/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "double 4096 writes no O_APPEND flag",
+			.dev	= "append0",
+			.flags	= 0,
+			.nr	= 2,
+			.size	= 4096,
+			.want	= 4096,
+			.alloc	= (4096/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "double 4096 writes with O_APPEND flag",
+			.dev	= "append1",
+			.flags	= O_APPEND,
+			.nr	= 2,
+			.size	= 4096,
+			.want	= 8192,
+			.alloc	= (8192/pagesize)*pagesize,
+		},
+		{
+			.name	= "double 4097 writes no O_APPEND flag",
+			.dev	= "append2",
+			.flags	= 0,
+			.nr	= 2,
+			.size	= 4097,
+			.want	= 4097,
+			.alloc	= (4097/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "double 4097 writes with O_APPEND flag",
+			.dev	= "append3",
+			.flags	= O_APPEND,
+			.nr	= 2,
+			.size	= 4097,
+			.want	= 8194,
+			.alloc	= (8194/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4095 writes no O_APPEND flag",
+			.dev	= "append0",
+			.flags	= 0,
+			.nr	= 3,
+			.size	= 4095,
+			.want	= 4095,
+			.alloc	= (4095/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4095 writes with O_APPEND flag",
+			.dev	= "append1",
+			.flags	= O_APPEND,
+			.nr	= 3,
+			.size	= 4095,
+			.want	= 12285,
+			.alloc	= (12285/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4096 writes no O_APPEND flag",
+			.dev	= "append2",
+			.flags	= 0,
+			.nr	= 3,
+			.size	= 4096,
+			.want	= 4096,
+			.alloc	= (4096/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4096 writes with O_APPEND flag",
+			.dev	= "append3",
+			.flags	= O_APPEND,
+			.nr	= 3,
+			.size	= 4096,
+			.want	= 12288,
+			.alloc	= (12288/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4097 writes no O_APPEND flag",
+			.dev	= "append0",
+			.flags	= 0,
+			.nr	= 3,
+			.size	= 4097,
+			.want	= 4097,
+			.alloc	= (4097/pagesize+1)*pagesize,
+		},
+		{
+			.name	= "triple 4097 writes with O_APPEND flag",
+			.dev	= "append1",
+			.flags	= O_APPEND,
+			.nr	= 3,
+			.size	= 4097,
+			.want	= 12291,
+			.alloc	= (12291/pagesize+1)*pagesize,
 		},
 		{.name = NULL},
 	};
