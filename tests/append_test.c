@@ -44,7 +44,6 @@ static void dump(FILE *s, const char *tag, const unsigned char *restrict buf, si
 	fprintf(s, "\n");
 }
 
-
 static void test(const struct test *restrict t)
 {
 	char *ptr, obuf[t->size], ibuf[t->size];
