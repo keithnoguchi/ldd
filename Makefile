@@ -12,6 +12,7 @@ MODS  += faulty
 MODS  += sem
 MODS  += rwsem
 MODS  += mutex
+MODS  += comp
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
