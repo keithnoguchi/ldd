@@ -80,10 +80,11 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct open_device));
 		atomic_set(&dev->open_nr, 0);
 		cdev_init(&dev->cdev, &drv->fops);
-		dev->cdev.owner	= THIS_MODULE;
 		device_initialize(&dev->base);
-		dev->base.init_name = name;
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
+		dev->cdev.owner		= drv->base.owner;
+		dev->base.init_name	= name;
+		dev->base.devt		= MKDEV(MAJOR(drv->devt),
+						MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			end = dev;

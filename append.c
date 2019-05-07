@@ -204,15 +204,15 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct append_device));
+		cdev_init(&dev->cdev, &drv->fops);
+		device_initialize(&dev->base);
+		mutex_init(&dev->lock);
 		dev->data		= NULL;
 		dev->alloc = dev->size	= 0;
 		dev->base.init_name	= name;
 		dev->base.groups	= append_groups;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
-		mutex_init(&dev->lock);
-		cdev_init(&dev->cdev, &drv->fops);
-		device_initialize(&dev->base);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			end = dev;
