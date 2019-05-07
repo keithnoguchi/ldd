@@ -91,17 +91,17 @@ static void test(const struct test *restrict t)
 	ptr = ibuf;
 	got = 0;
 	while ((len = read(fd, ptr, rem)) > 0) {
+		if (len == 0) {
+			if (memcmp(ibuf, obuf, got%sizeof(ibuf)))
+				goto dataerr;
+			break;
+		}
 		got += len;
 		rem -= len;
 		ptr += len;
 		if (rem == 0) {
-			if (memcmp(ibuf, obuf, sizeof(ibuf))) {
-				fprintf(stderr, "%s: unexpected receive data\n",
-					t->name);
-				dump(stderr, "ibuf", (unsigned char *)ibuf, sizeof(ibuf));
-				dump(stderr, "obuf", (unsigned char *)obuf, sizeof(ibuf));
-				goto err;
-			}
+			if (memcmp(ibuf, obuf, sizeof(ibuf)))
+				goto dataerr;
 			rem = sizeof(ibuf);
 			ptr = ibuf;
 		}
@@ -146,6 +146,12 @@ static void test(const struct test *restrict t)
 		goto err;
 	}
 	exit(EXIT_SUCCESS);
+dataerr:
+	fprintf(stderr, "%s: unexpected receive data\n",
+		t->name);
+	dump(stderr, "ibuf", (unsigned char *)ibuf, sizeof(ibuf));
+	dump(stderr, "obuf", (unsigned char *)obuf, sizeof(ibuf));
+	goto err;
 perr:
 	perror(t->name);
 err:

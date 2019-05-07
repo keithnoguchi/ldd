@@ -84,16 +84,10 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 		lpos = dev->size;
 	if (lpos+count > dev->alloc) {
 		size_t alloc = ((lpos+count)/PAGE_SIZE+1)*PAGE_SIZE;
-		printk(KERN_INFO "[%s:%d] kzalloc(%ld,page=%ld)\n",
-		       dev_name(&dev->base), task_pid_nr(current), alloc, PAGE_SIZE);
-		data = kzalloc(alloc, GFP_KERNEL);
+		data = krealloc(dev->data, alloc, GFP_KERNEL);
 		if (IS_ERR(data)) {
 			len = PTR_ERR(data);
 			goto out;
-		}
-		if (dev->data) {
-			memcpy(data, dev->data, dev->size);
-			kfree(dev->data);
 		}
 		dev->alloc = alloc;
 		dev->data = data;
