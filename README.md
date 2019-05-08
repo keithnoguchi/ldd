@@ -40,6 +40,8 @@
   - [rwsem_test.c](tests/rwsem_test.c): rwsem.c unit test
 - [mutex.c](mutex.c): <linux/mutex.h> test module
   - [mutex_test.c](tests/mutex_test.c): mutex.c unit test
+- [comp.c](comp.c): <linux/completion.h> test module
+  - [comp_test.c](tests/comp_test.c): comp.c unit test
 
 ## Build
 

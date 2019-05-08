@@ -5,7 +5,9 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
+#include <pthread.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
@@ -14,25 +16,119 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
-	unsigned int	waiter;
+	unsigned int	waiters;
 };
 
-static void test(const struct test *restrict t)
+static void *test(void *arg)
 {
+	const struct test *t = arg;
 	char path[PATH_MAX];
 	int err, fd;
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
 		goto perr;
-	fd = open(path, O_RDWR);
+	fd = open(path, O_RDONLY);
 	if (fd == -1)
 		goto perr;
+	err = read(fd, NULL, 0);
+	if (err < 0)
+		goto perr;
+	return (void *)EXIT_SUCCESS;
+perr:
+	perror(t->name);
+	return (void *)EXIT_FAILURE;
+}
+
+static void tester(const struct test *restrict t)
+{
+	pthread_t waiters[t->waiters];
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
+	int i, err, fd;
+	void *retp;
+	long val;
+	FILE *fp;
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		goto perr;
+	memset(waiters, 0, sizeof(waiters));
+	for (i = 0; i < t->waiters; i++) {
+		err = pthread_create(&waiters[i], NULL, test, (void *)t);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+	}
+	/* wait for all the waiters */
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
+	if (err < 0)
+		goto perr;
+	do {
+		pthread_yield();
+		fp = fopen(path, "r");
+		if (!fp) {
+			fprintf(stderr, "%s: %s: %s\n", t->name, path, strerror(errno));
+			goto err;
+		}
+		err = fread(buf, sizeof(buf), 1, fp);
+		if (err == 0 && ferror(fp))
+			goto perr;
+		if (fclose(fp) == -1)
+			goto perr;
+		val = strtol(buf, NULL, 10);
+	} while (val < t->waiters);
+
+	/* notify the completion to all the waiters */
+	for (i = 0; i < t->waiters; i++) {
+		err = write(fd, NULL, 0);
+		if (err == -1)
+			goto perr;
+	}
+	for (i = 0; i < t->waiters; i++) {
+		if (!waiters[i])
+			continue;
+		err = pthread_join(waiters[i], &retp);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		if (retp) {
+			fprintf(stderr, "%s: waiter exited abnormally\n",
+				t->name);
+			goto err;
+		}
+	}
+	/* make sure all the waiters are gone */
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp) {
+		fprintf(stderr, "%s: %s: %s\n", t->name, path, strerror(errno));
+		goto err;
+	}
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected number of waiters:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
 	if (close(fd) == -1)
 		goto perr;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
+err:
 	exit(EXIT_FAILURE);
 }
 
@@ -40,24 +136,64 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "single completion waiter",
-			.dev	= "comp0",
-			.waiter	= 1,
+			.name		= "single completion waiter",
+			.dev		= "comp0",
+			.waiters	= 1,
 		},
 		{
-			.name	= "two completion waiters",
-			.dev	= "comp1",
-			.waiter	= 2,
+			.name		= "two completion waiters",
+			.dev		= "comp1",
+			.waiters	= 2,
 		},
 		{
-			.name	= "three completion waiters",
-			.dev	= "comp2",
-			.waiter	= 3,
+			.name		= "three completion waiters",
+			.dev		= "comp2",
+			.waiters	= 3,
 		},
 		{
-			.name	= "four completion waiters",
-			.dev	= "comp3",
-			.waiter	= 4,
+			.name		= "four completion waiters",
+			.dev		= "comp3",
+			.waiters	= 4,
+		},
+		{
+			.name		= "8 completion waiters",
+			.dev		= "comp0",
+			.waiters	= 8,
+		},
+		{
+			.name		= "16 completion waiters",
+			.dev		= "comp1",
+			.waiters	= 16,
+		},
+		{
+			.name		= "32 completion waiters",
+			.dev		= "comp2",
+			.waiters	= 32,
+		},
+		{
+			.name		= "64 completion waiters",
+			.dev		= "comp3",
+			.waiters	= 64,
+		},
+		{
+			.name		= "128 completion waiters",
+			.dev		= "comp0",
+			.waiters	= 128,
+		},
+		{
+			.name		= "256 completion waiters",
+			.dev		= "comp1",
+			.waiters	= 256,
+		},
+		{
+			.name		= "512 completion waiters",
+			.dev		= "comp2",
+			.waiters	= 512,
+		},
+		{
+			.name		= "768 completion waiters",
+			.dev		= "comp3",
+			.waiters	= 768,
 		},
 		{.name = NULL},
 	};
@@ -70,7 +206,7 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			test(t);
+			tester(t);
 
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)
