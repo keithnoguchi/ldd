@@ -187,7 +187,7 @@ static int __init init(void)
 	struct seq_driver *drv = &seq_driver;
 	struct seq_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct seq_device *dev;
-	char name[5]; /* sizeof(drv->base.name)+2 */
+	char name[5]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	init_driver(drv);

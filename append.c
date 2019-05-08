@@ -186,7 +186,7 @@ static int __init init(void)
 	struct append_driver *drv = &append_driver;
 	struct append_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct append_device *dev;
-	char name[8]; /* sizeof(drv->base.name)+2 */
+	char name[8]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),

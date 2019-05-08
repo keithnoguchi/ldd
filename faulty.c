@@ -45,7 +45,7 @@ static int __init init(void)
 	struct faulty_driver *drv = &faulty_driver;
 	struct faulty_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct faulty_device *dev;
-	char name[8]; /* sizeof(drv->base.name)+2 */
+	char name[8]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	init_driver(drv);

@@ -105,7 +105,7 @@ static int __init init(void)
 	struct sem_driver *drv = &sem_driver;
 	struct sem_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct sem_device *dev;
-	char name[5]; /* sizeof(drv->base.name)+2 */
+	char name[5]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	err = init_driver(drv);

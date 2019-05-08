@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -10,16 +12,51 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	unsigned int	nr;
 };
 
-static void test(struct test *restrict t)
+static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	int err, fd;
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		goto perr;
+	if (close(fd) == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "single instance",
+			.dev	= "spin0",
+			.nr	= 1,
+		},
+		{
+			.name	= "double instances",
+			.dev	= "spin1",
+			.nr	= 2,
+		},
+		{
+			.name	= "triple instances",
+			.dev	= "spin0",
+			.nr	= 3,
+		},
+		{
+			.name	= "quad instances",
+			.dev	= "spin1",
+			.nr	= 4,
+		},
 		{.name = NULL},
 	};
 

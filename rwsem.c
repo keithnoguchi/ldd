@@ -128,7 +128,7 @@ static int __init init(void)
 	struct rwsem_driver *drv = &rwsem_driver;
 	struct rwsem_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct rwsem_device *dev;
-	char name[7]; /* sizeof(drv->base.name)+2 */
+	char name[7]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	init_driver(drv);

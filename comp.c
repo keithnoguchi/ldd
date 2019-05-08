@@ -95,7 +95,7 @@ static int __init init(void)
 	struct comp_driver *drv = &comp_driver;
 	struct comp_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct comp_device *dev;
-	char name[6]; /* sizeof(drv->base.name)+2 */
+	char name[6]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	err = init_driver(drv);
