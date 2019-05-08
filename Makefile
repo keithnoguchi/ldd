@@ -13,6 +13,7 @@ MODS  += sem
 MODS  += rwsem
 MODS  += mutex
 MODS  += comp
+MODS  += spin
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
