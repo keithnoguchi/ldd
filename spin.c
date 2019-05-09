@@ -6,16 +6,19 @@
 #include <linux/fs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/err.h>
+#include <linux/slab.h>
 #include <linux/spinlock.h>
 
-struct spin_instance {
-	struct spin_instance	*next;
+struct spin_context {
+	struct spin_context	*next;
 	struct file		*fp;
+	unsigned int		count;
 };
 
 struct spin_device {
 	spinlock_t		lock;
-	struct spin_instance	*head;
+	struct spin_context	*head;
 	struct miscdevice	base;
 };
 
@@ -28,10 +31,65 @@ static struct spin_driver {
 	.base.owner	= THIS_MODULE,
 };
 
+static int open(struct inode *ip, struct file *fp)
+{
+	struct spin_device *dev = container_of(fp->private_data,
+					       struct spin_device, base);
+	struct spin_context **ctx, *tmp = NULL;
+
+	/* allocate the context just in case it's brand new */
+	tmp = kzalloc(sizeof(struct spin_context), GFP_KERNEL);
+	if (IS_ERR(tmp))
+		return PTR_ERR(tmp);
+	tmp->count = 1;
+	tmp->fp = fp;
+
+	/* just make counter up if there is a context already */
+	spin_lock(&dev->lock);
+	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
+		if ((*ctx)->fp == fp) {
+			++(*ctx)->count;
+			goto out;
+		}
+	/* no entry, let's add to the end */
+	*ctx = tmp;
+	tmp = NULL;
+out:
+	spin_unlock(&dev->lock);
+	if (tmp)
+		kfree(tmp);
+	return 0;
+}
+
+static int release(struct inode *ip, struct file *fp)
+{
+	struct spin_device *dev = container_of(fp->private_data,
+					       struct spin_device, base);
+	struct spin_context **ctx, *got = NULL;
+
+	spin_lock(&dev->lock);
+	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
+		if ((*ctx)->fp == fp) {
+			got = *ctx;
+			if (--(*ctx)->count == 0) {
+				*ctx = (*ctx)->next;
+				kfree(got);
+			}
+			goto out;
+		}
+out:
+	spin_unlock(&dev->lock);
+	if (!got)
+		return -EINVAL;
+	return 0;
+}
+
 static int __init init_driver(struct spin_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
+	drv->fops.open		= open;
+	drv->fops.release	= release;
 	return 0;
 }
 
@@ -78,8 +136,14 @@ static void __exit term(void)
 	struct spin_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct spin_device *dev;
 
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
+		struct spin_context *ctx, *next;
+		for (ctx = dev->head; ctx; ctx = next) {
+			next = ctx->next;
+			kfree(ctx);
+		}
 		misc_deregister(&dev->base);
+	}
 }
 module_exit(term);
 
