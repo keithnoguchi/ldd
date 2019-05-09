@@ -27,7 +27,7 @@ static struct spin_driver {
 	struct device_driver	base;
 	struct spin_device	devs[2];
 } spin_driver = {
-	.base.name	= "spin",
+	.base.name	= "spinlock",
 	.base.owner	= THIS_MODULE,
 };
 
@@ -98,7 +98,7 @@ static int __init init(void)
 	struct spin_driver *drv = &spin_driver;
 	struct spin_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct spin_device *dev;
-	char name[6]; /* strlen(drv->base.name)+2 */
+	char name[10]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
 	err = init_driver(drv);

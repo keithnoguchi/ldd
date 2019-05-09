@@ -42,6 +42,8 @@
   - [mutex_test.c](tests/mutex_test.c): mutex.c unit test
 - [comp.c](comp.c): <linux/completion.h> test module
   - [comp_test.c](tests/comp_test.c): comp.c unit test
+- [spinlock.c](spinlock.c): <linux/spinlock.h> test module
+  - [spinlock_test.c](tests/spinlock_test.c): spinlock.c unit test
 
 ## Build
 

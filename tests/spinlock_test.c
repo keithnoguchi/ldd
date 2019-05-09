@@ -83,7 +83,7 @@ static void tester(struct test *t)
 	for (i = 0; i < t->nr; i++) {
 		if (!lockers[i])
 			continue;
-		err = pthread_join(lockers[i], retp);
+		err = pthread_join(lockers[i], &retp);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -103,7 +103,7 @@ int main(void)
 	const struct test *t, tests[] = {
 		{
 			.name	= "single thread",
-			.dev	= "spin0",
+			.dev	= "spinlock0",
 			.nr	= 1,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -111,7 +111,7 @@ int main(void)
 		},
 		{
 			.name	= "double threads",
-			.dev	= "spin1",
+			.dev	= "spinlock1",
 			.nr	= 2,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -119,7 +119,7 @@ int main(void)
 		},
 		{
 			.name	= "triple threads",
-			.dev	= "spin0",
+			.dev	= "spinlock0",
 			.nr	= 3,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -127,7 +127,7 @@ int main(void)
 		},
 		{
 			.name	= "quad threads",
-			.dev	= "spin1",
+			.dev	= "spinlock1",
 			.nr	= 4,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -135,7 +135,7 @@ int main(void)
 		},
 		{
 			.name	= "32 threads",
-			.dev	= "spin0",
+			.dev	= "spinlock0",
 			.nr	= 32,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -143,7 +143,7 @@ int main(void)
 		},
 		{
 			.name	= "64 threads",
-			.dev	= "spin1",
+			.dev	= "spinlock1",
 			.nr	= 64,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -151,7 +151,7 @@ int main(void)
 		},
 		{
 			.name	= "128 threads",
-			.dev	= "spin0",
+			.dev	= "spinlock0",
 			.nr	= 128,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -159,7 +159,7 @@ int main(void)
 		},
 		{
 			.name	= "256 threads",
-			.dev	= "spin1",
+			.dev	= "spinlock1",
 			.nr	= 256,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
@@ -167,7 +167,7 @@ int main(void)
 		},
 		{
 			.name	= "512 threads",
-			.dev	= "spin0",
+			.dev	= "spinlock0",
 			.nr	= 512,
 			.lock	= PTHREAD_MUTEX_INITIALIZER,
 			.cond	= PTHREAD_COND_INITIALIZER,
