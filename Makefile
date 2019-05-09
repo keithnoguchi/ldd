@@ -14,6 +14,7 @@ MODS  += rwsem
 MODS  += mutex
 MODS  += comp
 MODS  += spinlock
+MODS  += rwlock
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
@@ -41,10 +42,9 @@ unload:
 reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
-test: modules reload run_tests
-run_tests:
-	TESTS="$(TESTS)" $(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
+test $(TESTS): modules reload
+	@TESTS="$(TESTS)" $(MAKE) -C tests $@
+run_tests: modules reload
+	@TESTS="$(TESTS)" $(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
 	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
-$(TESTS): modules reload
-	$(MAKE) -C tests $@

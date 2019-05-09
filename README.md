@@ -71,7 +71,7 @@ make[1]: Leaving directory '/home/kei/src/linux-5.0.6'
 ## Test
 
 ```sh
-$ sudo make test
+$ sudo make run_tests
 make -C /lib/modules/5.0.6.1/build M=/home/kei/git/ldd modules_install
 make[1]: Entering directory '/home/kei/src/linux-5.0.6'
   INSTALL /home/kei/git/ldd/ldd.ko
