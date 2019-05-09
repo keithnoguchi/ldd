@@ -2,33 +2,47 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/string.h>
+#include <linux/stat.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 
 struct faulty_device {
+	bool			crash;
 	struct miscdevice	base;
 };
 
 static struct faulty_driver {
+	bool			crash;
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct faulty_device	devs[2];
 } faulty_driver = {
-	.base.owner	= THIS_MODULE,
+	.crash		= false,	/* call dump_stack() by default */
 	.base.name	= "faulty",
+	.base.owner	= THIS_MODULE,
 };
+module_param_named(crash, faulty_driver.crash, bool, S_IWUSR|S_IRUGO);
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
-	*(int *)0 = 0; /* let it crash */
+	struct faulty_device *dev = container_of(fp->private_data,
+						 struct faulty_device, base);
+	if (dev->crash)
+		*(int *)0 = 0; /* let it crash */
+	dump_stack();
 	return 0;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
-	*(int *)0 = 0; /* let it crash */
+	struct faulty_device *dev = container_of(fp->private_data,
+						 struct faulty_device, base);
+	if (dev->crash)
+		*(int *)0 = 0;
+	dump_stack();
 	return 0;
 }
 
@@ -55,6 +69,8 @@ static int __init init(void)
 			end = dev;
 			goto err;
 		}
+		memset(dev, 0, sizeof(struct faulty_device));
+		dev->crash	= drv->crash;
 		dev->base.name	= name;
 		dev->base.fops	= &drv->fops;
 		dev->base.minor	= MISC_DYNAMIC_MINOR;

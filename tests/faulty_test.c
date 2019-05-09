@@ -20,17 +20,27 @@ struct test {
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
-	int fd, ret;
+	int fd, err;
 
-	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
-	if (ret < 0)
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
 		goto perr;
 	fd = open(path, t->flags);
 	if (fd == -1)
 		goto perr;
+	if ((t->flags&O_ACCMODE) != O_WRONLY) {
+		err = read(fd, NULL, 0);
+		if (err == -1)
+			goto perr;
+	}
+	if ((t->flags&O_ACCMODE) != O_RDONLY) {
+		err = write(fd, NULL, 0);
+		if (err == -1)
+			goto perr;
+	}
 	exit(EXIT_SUCCESS);
 perr:
-	fprintf(stderr, "%s: %s\n", t->name, strerror(errno));
+	perror(t->name);
 	exit(EXIT_FAILURE);
 }
 
