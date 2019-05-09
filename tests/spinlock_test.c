@@ -53,7 +53,6 @@ perr:
 static void tester(struct test *t)
 {
 	pthread_t lockers[t->nr];
-	void *retp = NULL;
 	int i, err;
 
 	memset(lockers, 0, sizeof(lockers));
@@ -81,6 +80,7 @@ static void tester(struct test *t)
 		goto perr;
 	}
 	for (i = 0; i < t->nr; i++) {
+		void *retp = NULL;
 		if (!lockers[i])
 			continue;
 		err = pthread_join(lockers[i], &retp);
@@ -88,7 +88,7 @@ static void tester(struct test *t)
 			errno = err;
 			goto perr;
 		}
-		if (retp != NULL)
+		if (retp != (void *)EXIT_SUCCESS)
 			goto err;
 	}
 	exit(EXIT_SUCCESS);

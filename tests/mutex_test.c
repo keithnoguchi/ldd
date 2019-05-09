@@ -68,7 +68,6 @@ static void tester(struct test *t)
 	char path[PATH_MAX];
 	char buf[LINE_MAX];
 	int fail = 0;
-	void *retp;
 	int i, err;
 	FILE *fp;
 	long val;
@@ -161,6 +160,7 @@ static void tester(struct test *t)
 	fflush(stdout);
 join:
 	for (i = 0; i < t->readers; i++) {
+		void *retp = NULL;
 		if (!readers[i])
 			continue;
 		err = pthread_join(readers[i], &retp);
@@ -169,10 +169,11 @@ join:
 			errno = err;
 			perror(t->name);
 		}
-		if (retp)
+		if (retp != (void *)EXIT_SUCCESS)
 			fail++;
 	}
 	for (i = 0; i < t->writers; i++) {
+		void *retp = NULL;
 		if (!writers[i])
 			continue;
 		err = pthread_join(writers[i], &retp);
@@ -181,7 +182,7 @@ join:
 			errno = err;
 			perror(t->name);
 		}
-		if (retp)
+		if (retp != (void *)EXIT_SUCCESS)
 			fail++;
 	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
@@ -218,78 +219,117 @@ int main(void)
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 0,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "one writer",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 1,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "one reader and one writer",
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 1,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "16 readers",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 0,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "16 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 16,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "16 readers and 16 writers",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 16,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "32 readers",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 0,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "32 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 32,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "32 readers and 32 writers",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 32,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "64 readers",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 0,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "64 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 64,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "64 readers and 64 writers",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 64,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{
 			.name		= "256 readers and 16 writers",
 			.dev		= "sem0",
 			.readers	= 256,
 			.writers	= 16,
+			.lock		= PTHREAD_MUTEX_INITIALIZER,
+			.cond		= PTHREAD_COND_INITIALIZER,
+			.start		= 0,
 		},
 		{.name = NULL},
 	};
