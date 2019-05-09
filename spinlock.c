@@ -10,35 +10,35 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-struct spin_context {
-	struct spin_context	*next;
+struct spinlock_context {
+	struct spinlock_context	*next;
 	struct file		*fp;
 	unsigned int		count;
 };
 
-struct spin_device {
+struct spinlock_device {
 	spinlock_t		lock;
-	struct spin_context	*head;
+	struct spinlock_context	*head;
 	struct miscdevice	base;
 };
 
-static struct spin_driver {
+static struct spinlock_driver {
 	struct file_operations	fops;
 	struct device_driver	base;
-	struct spin_device	devs[2];
-} spin_driver = {
+	struct spinlock_device	devs[2];
+} spinlock_driver = {
 	.base.name	= "spinlock",
 	.base.owner	= THIS_MODULE,
 };
 
 static int open(struct inode *ip, struct file *fp)
 {
-	struct spin_device *dev = container_of(fp->private_data,
-					       struct spin_device, base);
-	struct spin_context **ctx, *tmp = NULL;
+	struct spinlock_device *dev = container_of(fp->private_data,
+						   struct spinlock_device, base);
+	struct spinlock_context **ctx, *tmp = NULL;
 
 	/* allocate the context just in case it's brand new */
-	tmp = kzalloc(sizeof(struct spin_context), GFP_KERNEL);
+	tmp = kzalloc(sizeof(struct spinlock_context), GFP_KERNEL);
 	if (IS_ERR(tmp))
 		return PTR_ERR(tmp);
 	tmp->count = 1;
@@ -63,9 +63,9 @@ out:
 
 static int release(struct inode *ip, struct file *fp)
 {
-	struct spin_device *dev = container_of(fp->private_data,
-					       struct spin_device, base);
-	struct spin_context **ctx, *got = NULL;
+	struct spinlock_device *dev = container_of(fp->private_data,
+						   struct spinlock_device, base);
+	struct spinlock_context **ctx, *got = NULL;
 
 	spin_lock(&dev->lock);
 	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
@@ -84,7 +84,7 @@ out:
 	return 0;
 }
 
-static int __init init_driver(struct spin_driver *drv)
+static int __init init_driver(struct spinlock_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
@@ -95,9 +95,9 @@ static int __init init_driver(struct spin_driver *drv)
 
 static int __init init(void)
 {
-	struct spin_driver *drv = &spin_driver;
-	struct spin_device *end = drv->devs+ARRAY_SIZE(drv->devs);
-	struct spin_device *dev;
+	struct spinlock_driver *drv = &spinlock_driver;
+	struct spinlock_device *end = drv->devs+ARRAY_SIZE(drv->devs);
+	struct spinlock_device *dev;
 	char name[10]; /* strlen(drv->base.name)+2 */
 	int i, err;
 
@@ -110,7 +110,7 @@ static int __init init(void)
 			end = dev;
 			goto err;
 		}
-		memset(dev, 0, sizeof(struct spin_device));
+		memset(dev, 0, sizeof(struct spinlock_device));
 		spin_lock_init(&dev->lock);
 		dev->head	= NULL;
 		dev->base.name	= name;
@@ -132,12 +132,12 @@ module_init(init);
 
 static void __exit term(void)
 {
-	struct spin_driver *drv = &spin_driver;
-	struct spin_device *end = drv->devs+ARRAY_SIZE(drv->devs);
-	struct spin_device *dev;
+	struct spinlock_driver *drv = &spinlock_driver;
+	struct spinlock_device *end = drv->devs+ARRAY_SIZE(drv->devs);
+	struct spinlock_device *dev;
 
 	for (dev = drv->devs; dev != end; dev++) {
-		struct spin_context *ctx, *next;
+		struct spinlock_context *ctx, *next;
 		for (ctx = dev->head; ctx; ctx = next) {
 			next = ctx->next;
 			kfree(ctx);
