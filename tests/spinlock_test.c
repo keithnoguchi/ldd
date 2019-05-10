@@ -53,8 +53,30 @@ perr:
 static void tester(struct test *t)
 {
 	pthread_t lockers[t->nr];
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
 	int i, err;
+	FILE *fp;
+	long val;
 
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected initial active contexts\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
+	}
 	memset(lockers, 0, sizeof(lockers));
 	for (i = 0; i < t->nr; i++) {
 		err = pthread_create(&lockers[i], NULL, test, (void *)t);
@@ -90,6 +112,24 @@ static void tester(struct test *t)
 		}
 		if (retp != (void *)EXIT_SUCCESS)
 			goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != 0) {
+		fprintf(stderr, "%s: unexpected final active contexts\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, val);
+		goto err;
 	}
 	exit(EXIT_SUCCESS);
 perr:

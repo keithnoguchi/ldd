@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/err.h>
@@ -34,7 +35,8 @@ static struct spinlock_driver {
 static int open(struct inode *ip, struct file *fp)
 {
 	struct spinlock_device *dev = container_of(fp->private_data,
-						   struct spinlock_device, base);
+						   struct spinlock_device,
+						   base);
 	struct spinlock_context **ctx, *tmp = NULL;
 
 	/* allocate the context just in case it's brand new */
@@ -64,7 +66,8 @@ out:
 static int release(struct inode *ip, struct file *fp)
 {
 	struct spinlock_device *dev = container_of(fp->private_data,
-						   struct spinlock_device, base);
+						   struct spinlock_device,
+						   base);
 	struct spinlock_context **ctx, *got = NULL;
 
 	spin_lock(&dev->lock);
@@ -83,6 +86,30 @@ out:
 		return -EINVAL;
 	return 0;
 }
+
+static ssize_t active_show(struct device *base,
+			   struct device_attribute *attr,
+			   char *page)
+{
+	struct spinlock_device *dev = container_of(dev_get_drvdata(base),
+						   struct spinlock_device,
+						   base);
+	struct spinlock_context *ctx;
+	size_t nr = 0;
+
+	spin_lock(&dev->lock);
+	for (ctx = dev->head; ctx; ctx = ctx->next)
+		nr++;
+	spin_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", nr);
+}
+static DEVICE_ATTR_RO(active);
+
+static struct attribute *spinlock_attrs[] = {
+	&dev_attr_active.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(spinlock);
 
 static int __init init_driver(struct spinlock_driver *drv)
 {
@@ -112,10 +139,11 @@ static int __init init(void)
 		}
 		memset(dev, 0, sizeof(struct spinlock_device));
 		spin_lock_init(&dev->lock);
-		dev->head	= NULL;
-		dev->base.name	= name;
-		dev->base.fops	= &drv->fops;
-		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		dev->head		= NULL;
+		dev->base.name		= name;
+		dev->base.fops		= &drv->fops;
+		dev->base.minor		= MISC_DYNAMIC_MINOR;
+		dev->base.groups	= spinlock_groups;
 		err = misc_register(&dev->base);
 		if (err) {
 			end = dev;
