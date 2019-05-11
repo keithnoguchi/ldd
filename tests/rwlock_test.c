@@ -24,6 +24,37 @@ struct context {
 	int			start;
 };
 
+static void *tester(void *arg)
+{
+	struct context *ctx = arg;
+	const struct test *const t = ctx->t;
+	char path[PATH_MAX];
+	int err, fd;
+
+	pthread_mutex_lock(&ctx->lock);
+	while (!ctx->start)
+		pthread_cond_wait(&ctx->cond, &ctx->lock);
+	pthread_mutex_unlock(&ctx->lock);
+
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		goto perr;
+	err = pthread_yield();
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	if (close(fd) == -1)
+		goto perr;
+	pthread_exit((void *)EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	pthread_exit((void *)EXIT_FAILURE);
+}
+
 static void test(const struct test *restrict t)
 {
 	struct context ctx = {
@@ -32,18 +63,35 @@ static void test(const struct test *restrict t)
 		.cond	= PTHREAD_COND_INITIALIZER,
 		.start	= 0,
 	};
+	pthread_t testers[t->nr];
 	char path[PATH_MAX];
-	int fd[t->nr];
+	char buf[BUFSIZ];
 	int i, err;
+	FILE *fp;
+	long got;
 
-	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active", t->dev);
 	if (err < 0)
 		goto perr;
-	memset(fd, 0, sizeof(fd));
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: unexpected initial active count:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
+	memset(testers, 0, sizeof(testers));
 	for (i = 0; i < t->nr; i++) {
-		fd[i] = open(path, O_RDONLY);
-		if (fd[i] == -1)
+		err = pthread_create(&testers[i], NULL, tester, &ctx);
+		if (err) {
+			errno = err;
 			goto perr;
+		}
 	}
 	err = pthread_mutex_lock(&ctx.lock);
 	if (err) {
@@ -61,15 +109,53 @@ static void test(const struct test *restrict t)
 		errno = err;
 		goto perr;
 	}
-	for (i = 0; i < t->nr; i++) {
-		if (!fd[i])
-			continue;
-		if (close(fd[i]) == -1)
-			goto perr;
+	err = pthread_yield();
+	if (err) {
+		errno = err;
+		goto perr;
 	}
+	for (i = 0; i < t->nr; i++) {
+		void *retp;
+		if (!testers[i])
+			continue;
+		err = pthread_join(testers[i], &retp);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		if (retp != EXIT_SUCCESS)
+			goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: unexpected final active count:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/free", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	fprintf(stdout, "%24s: %3ld context(s) on free list\n", t->name, got);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
+err:
 	exit(EXIT_FAILURE);
 }
 
@@ -77,47 +163,47 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "single thread",
+			.name	= "1 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 1,
 		},
 		{
-			.name	= "double threads",
+			.name	= "2 thread(s) on rwlock1",
 			.dev	= "rwlock1",
 			.nr	= 2,
 		},
 		{
-			.name	= "triple threads",
+			.name	= "3 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 3,
 		},
 		{
-			.name	= "quad threads",
+			.name	= "4 thread(s) on rwlock1",
 			.dev	= "rwlock1",
 			.nr	= 4,
 		},
 		{
-			.name	= "32 threads",
+			.name	= "32 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 32,
 		},
 		{
-			.name	= "64 threads",
+			.name	= "64 thread(s) on rwlock1",
 			.dev	= "rwlock1",
 			.nr	= 64,
 		},
 		{
-			.name	= "128 threads",
+			.name	= "128 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 128,
 		},
 		{
-			.name	= "256 threads",
+			.name	= "256 thread(s) on rwlock1",
 			.dev	= "rwlock1",
 			.nr	= 256,
 		},
 		{
-			.name	= "512 threads",
+			.name	= "512 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 512,
 		},

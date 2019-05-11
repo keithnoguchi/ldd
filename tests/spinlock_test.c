@@ -142,6 +142,21 @@ static void test(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/free",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	fprintf(stdout, "%26s: %3ld context(s) on free list\n",
+		t->name, val);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -153,47 +168,47 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "single thread",
+			.name	= "1 thread(s) on spinlock0",
 			.dev	= "spinlock0",
 			.nr	= 1,
 		},
 		{
-			.name	= "double threads",
+			.name	= "2 thread(s) on spinlock1",
 			.dev	= "spinlock1",
 			.nr	= 2,
 		},
 		{
-			.name	= "triple threads",
+			.name	= "3 thread(s) on spinlock0",
 			.dev	= "spinlock0",
 			.nr	= 3,
 		},
 		{
-			.name	= "quad threads",
+			.name	= "4 thread(s) on spinlock1",
 			.dev	= "spinlock1",
 			.nr	= 4,
 		},
 		{
-			.name	= "32 threads",
+			.name	= "32 thread(s) on spinlock0",
 			.dev	= "spinlock0",
 			.nr	= 32,
 		},
 		{
-			.name	= "64 threads",
+			.name	= "64 thread(s) on spinlock1",
 			.dev	= "spinlock1",
 			.nr	= 64,
 		},
 		{
-			.name	= "128 threads",
+			.name	= "128 thread(s) on spinlock0",
 			.dev	= "spinlock0",
 			.nr	= 128,
 		},
 		{
-			.name	= "256 threads",
+			.name	= "256 thread(s) on spinlock1",
 			.dev	= "spinlock1",
 			.nr	= 256,
 		},
 		{
-			.name	= "512 threads",
+			.name	= "512 thread(s) on spinlock0",
 			.dev	= "spinlock0",
 			.nr	= 512,
 		},

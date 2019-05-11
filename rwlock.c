@@ -60,6 +60,7 @@ static int open(struct inode *ip, struct file *fp)
 			(*ctx)->count++;
 			goto out;
 		}
+	/* add to the end */
 	*ctx = tmp;
 	tmp = NULL;
 out:
@@ -82,7 +83,7 @@ static int release(struct inode *ip, struct file *fp)
 	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
 		if ((*ctx)->fp == fp) {
 			got = *ctx;
-			if (--(*ctx)->fp == 0) {
+			if (--(*ctx)->count == 0) {
 				*ctx = (*ctx)->next;
 				got->next = dev->free;
 				dev->free = got;
@@ -95,6 +96,47 @@ out:
 		return -EINVAL;
 	return 0;
 }
+
+static ssize_t active_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct rwlock_device *dev = container_of(dev_get_drvdata(base),
+						 struct rwlock_device,
+						 base);
+	struct rwlock_context *ctx;
+	unsigned long nr = 0;
+
+	read_lock(&dev->lock);
+	for (ctx = dev->head; ctx; ctx = ctx->next)
+		nr++;
+	read_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%lu\n", nr);
+}
+static DEVICE_ATTR_RO(active);
+
+static ssize_t free_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct rwlock_device *dev = container_of(dev_get_drvdata(base),
+						 struct rwlock_device,
+						 base);
+	struct rwlock_context *ctx;
+	unsigned long nr = 0;
+
+	read_lock(&dev->lock);
+	for (ctx = dev->free; ctx; ctx = ctx->next)
+		nr++;
+	read_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%lu\n", nr);
+}
+static DEVICE_ATTR_RO(free);
+
+static struct attribute *rwlock_attrs[] = {
+	&dev_attr_active.attr,
+	&dev_attr_free.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(rwlock);
 
 static int __init init_driver(struct rwlock_driver *drv)
 {
@@ -127,6 +169,7 @@ static int __init init(void)
 		dev->head = dev->free	= NULL;
 		dev->base.name		= name;
 		dev->base.fops		= &drv->fops;
+		dev->base.groups	= rwlock_groups;
 		dev->base.minor		= MISC_DYNAMIC_MINOR;
 		err = misc_register(&dev->base);
 		if (err) {
