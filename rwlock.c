@@ -8,11 +8,14 @@
 #include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/err.h>
+#include <linux/slab.h>
 #include <linux/spinlock.h>
 
 struct rwlock_context {
 	struct rwlock_context	*next;
 	struct file		*fp;
+	int			count;
 };
 
 struct rwlock_device {
@@ -33,11 +36,63 @@ static struct rwlock_driver {
 
 static int open(struct inode *ip, struct file *fp)
 {
+	struct rwlock_device *dev = container_of(fp->private_data,
+						 struct rwlock_device,
+						 base);
+	struct rwlock_context **ctx, *tmp;
+
+	write_lock(&dev->lock);
+	tmp = dev->free;
+	if (tmp)
+		dev->free = tmp->next;
+	write_unlock(&dev->lock);
+	if (!tmp) {
+		tmp = kmalloc(sizeof(struct rwlock_context), GFP_KERNEL);
+		if (IS_ERR(tmp))
+			return PTR_ERR(tmp);
+	}
+	tmp->count = 1;
+	tmp->next = NULL;
+	tmp->fp = fp;
+	write_lock(&dev->lock);
+	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
+		if ((*ctx)->fp == fp) {
+			(*ctx)->count++;
+			goto out;
+		}
+	*ctx = tmp;
+	tmp = NULL;
+out:
+	if (tmp) {
+		tmp->next = dev->free;
+		dev->free = tmp;
+	}
+	write_unlock(&dev->lock);
 	return 0;
 }
 
 static int release(struct inode *ip, struct file *fp)
 {
+	struct rwlock_device *dev = container_of(fp->private_data,
+						 struct rwlock_device,
+						 base);
+	struct rwlock_context **ctx, *got;
+
+	write_lock(&dev->lock);
+	for (ctx = &dev->head; *ctx; ctx = &(*ctx)->next)
+		if ((*ctx)->fp == fp) {
+			got = *ctx;
+			if (--(*ctx)->fp == 0) {
+				*ctx = (*ctx)->next;
+				got->next = dev->free;
+				dev->free = got;
+			}
+			goto out;
+		}
+out:
+	write_unlock(&dev->lock);
+	if (!got)
+		return -EINVAL;
 	return 0;
 }
 
@@ -93,8 +148,18 @@ static void __exit term(void)
 	struct rwlock_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct rwlock_device *dev;
 
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
+		struct rwlock_context *ctx, *next;
+		for (ctx = dev->head; ctx; ctx = next) {
+			next = ctx->next;
+			kfree(ctx);
+		}
+		for (ctx = dev->free; ctx; ctx = next) {
+			next = ctx->next;
+			kfree(ctx);
+		}
 		misc_deregister(&dev->base);
+	}
 }
 module_exit(term);
 
