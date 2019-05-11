@@ -10,7 +10,7 @@ TESTS          ?= $(patsubst %.c,%,$(TEST_FILES))
 TEST_GEN_PROGS := $(TESTS)
 .PHONY: test $(TESTS)
 test: $(TESTS)
-$(TESTS): $(TEST_FILES)
+$(TESTS):
 	@$(CC) $(CFLAGS) -o $@ $@.c $(LDLIBS)
 	@echo ldd/tests/$@
 	@echo ========================================

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -14,13 +15,23 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	unsigned int	nr;
-	pthread_mutex_t	lock;
-	pthread_cond_t	cond;
-	int		start;
+};
+
+struct context {
+	const struct test	*const t;
+	pthread_mutex_t		lock;
+	pthread_cond_t		cond;
+	int			start;
 };
 
 static void test(const struct test *restrict t)
 {
+	struct context ctx = {
+		.t	= t,
+		.lock	= PTHREAD_MUTEX_INITIALIZER,
+		.cond	= PTHREAD_COND_INITIALIZER,
+		.start	= 0,
+	};
 	char path[PATH_MAX];
 	int fd[t->nr];
 	int i, err;
@@ -34,7 +45,22 @@ static void test(const struct test *restrict t)
 		if (fd[i] == -1)
 			goto perr;
 	}
-	pthread_yield();
+	err = pthread_mutex_lock(&ctx.lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	ctx.start = 1;
+	err = pthread_mutex_unlock(&ctx.lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_cond_broadcast(&ctx.cond);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
 	for (i = 0; i < t->nr; i++) {
 		if (!fd[i])
 			continue;
@@ -54,73 +80,46 @@ int main(void)
 			.name	= "single thread",
 			.dev	= "rwlock0",
 			.nr	= 1,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "double threads",
 			.dev	= "rwlock1",
 			.nr	= 2,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "triple threads",
 			.dev	= "rwlock0",
 			.nr	= 3,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "quad threads",
 			.dev	= "rwlock1",
 			.nr	= 4,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "32 threads",
 			.dev	= "rwlock0",
 			.nr	= 32,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "64 threads",
 			.dev	= "rwlock1",
 			.nr	= 64,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "128 threads",
 			.dev	= "rwlock0",
 			.nr	= 128,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "256 threads",
 			.dev	= "rwlock1",
 			.nr	= 256,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "512 threads",
 			.dev	= "rwlock0",
 			.nr	= 512,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{.name = NULL},
 	};

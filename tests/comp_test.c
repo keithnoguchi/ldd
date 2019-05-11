@@ -19,7 +19,7 @@ struct test {
 	unsigned int	waiters;
 };
 
-static void *test(void *arg)
+static void *tester(void *arg)
 {
 	const struct test *t = arg;
 	char path[PATH_MAX];
@@ -40,7 +40,7 @@ perr:
 	return (void *)EXIT_FAILURE;
 }
 
-static void tester(const struct test *restrict t)
+static void test(const struct test *restrict t)
 {
 	pthread_t waiters[t->waiters];
 	char path[PATH_MAX];
@@ -58,7 +58,7 @@ static void tester(const struct test *restrict t)
 		goto perr;
 	memset(waiters, 0, sizeof(waiters));
 	for (i = 0; i < t->waiters; i++) {
-		err = pthread_create(&waiters[i], NULL, test, (void *)t);
+		err = pthread_create(&waiters[i], NULL, tester, (void *)t);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -206,7 +206,7 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			tester(t);
+			test(t);
 
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)

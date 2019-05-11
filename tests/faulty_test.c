@@ -69,6 +69,7 @@ int main(void)
 			goto perr;
 		else if (pid == 0)
 			test(t);
+
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)
 			goto perr;

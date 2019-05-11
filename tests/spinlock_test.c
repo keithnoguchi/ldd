@@ -15,21 +15,26 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	unsigned int	nr;
-	pthread_mutex_t	lock;
-	pthread_cond_t	cond;
-	int		start;
 };
 
-static void *test(void *arg)
+struct context {
+	const struct test	*const t;
+	pthread_mutex_t		lock;
+	pthread_cond_t		cond;
+	int			start;
+};
+
+static void *tester(void *arg)
 {
-	struct test *t = arg;
+	struct context *ctx = arg;
+	const struct test *const t = ctx->t;
 	char path[PATH_MAX];
 	int err, fd;
 
-	pthread_mutex_lock(&t->lock);
-	while (!t->start)
-		pthread_cond_wait(&t->cond, &t->lock);
-	pthread_mutex_unlock(&t->lock);
+	pthread_mutex_lock(&ctx->lock);
+	while (!ctx->start)
+		pthread_cond_wait(&ctx->cond, &ctx->lock);
+	pthread_mutex_unlock(&ctx->lock);
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
@@ -50,8 +55,14 @@ perr:
 	pthread_exit((void *)EXIT_FAILURE);
 }
 
-static void tester(struct test *t)
+static void test(const struct test *restrict t)
 {
+	struct context ctx = {
+		.t	= t,
+		.lock	= PTHREAD_MUTEX_INITIALIZER,
+		.cond	= PTHREAD_COND_INITIALIZER,
+		.start	= 0,
+	};
 	pthread_t lockers[t->nr];
 	char path[PATH_MAX];
 	char buf[BUFSIZ];
@@ -79,24 +90,24 @@ static void tester(struct test *t)
 	}
 	memset(lockers, 0, sizeof(lockers));
 	for (i = 0; i < t->nr; i++) {
-		err = pthread_create(&lockers[i], NULL, test, (void *)t);
+		err = pthread_create(&lockers[i], NULL, tester, &ctx);
 		if (err) {
 			errno = err;
 			goto perr;
 		}
 	}
-	err = pthread_mutex_lock(&t->lock);
+	err = pthread_mutex_lock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	t->start = 1;
-	err = pthread_mutex_unlock(&t->lock);
+	ctx.start = 1;
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&t->cond);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
@@ -145,73 +156,46 @@ int main(void)
 			.name	= "single thread",
 			.dev	= "spinlock0",
 			.nr	= 1,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "double threads",
 			.dev	= "spinlock1",
 			.nr	= 2,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "triple threads",
 			.dev	= "spinlock0",
 			.nr	= 3,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "quad threads",
 			.dev	= "spinlock1",
 			.nr	= 4,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "32 threads",
 			.dev	= "spinlock0",
 			.nr	= 32,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "64 threads",
 			.dev	= "spinlock1",
 			.nr	= 64,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "128 threads",
 			.dev	= "spinlock0",
 			.nr	= 128,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "256 threads",
 			.dev	= "spinlock1",
 			.nr	= 256,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{
 			.name	= "512 threads",
 			.dev	= "spinlock0",
 			.nr	= 512,
-			.lock	= PTHREAD_MUTEX_INITIALIZER,
-			.cond	= PTHREAD_COND_INITIALIZER,
-			.start	= 0,
 		},
 		{.name = NULL},
 	};
@@ -224,7 +208,7 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			tester((struct test *)t);
+			test((struct test *)t);
 
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)

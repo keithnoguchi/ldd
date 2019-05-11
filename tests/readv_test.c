@@ -25,7 +25,7 @@ struct test {
 	size_t		want;
 };
 
-static void *test(void *arg)
+static void *tester(void *arg)
 {
 	const struct test *const t = arg;
 	char buf[LINE_MAX];
@@ -71,14 +71,14 @@ err:
 	pthread_exit((void *)EXIT_FAILURE);
 }
 
-static void tester(const struct test *restrict t)
+static void test(const struct test *restrict t)
 {
 	pthread_t tid[t->concurrent];
 	void *retp;
 	int i, ret;
 
 	for (i = 0; i < t->concurrent; i++) {
-		ret = pthread_create(&tid[i], NULL, test, (void *)t);
+		ret = pthread_create(&tid[i], NULL, tester, (void *)t);
 		if (ret)
 			goto err;
 	}
@@ -498,7 +498,8 @@ int main(void)
 			fprintf(stderr, "%s: %s\n",
 				t->name, strerror(errno));
 		} else if (pid == 0)
-			tester(t);
+			test(t);
+
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1) {
 			fprintf(stderr, "%s: %s\n", t->name,

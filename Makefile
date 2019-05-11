@@ -42,9 +42,9 @@ unload:
 reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
-test $(TESTS): modules reload
+test $(TESTS): modules clean_tests reload
 	@TESTS="$(TESTS)" $(MAKE) -C tests $@
 run_tests: modules reload
 	@TESTS="$(TESTS)" $(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
-	$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
+	@$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean

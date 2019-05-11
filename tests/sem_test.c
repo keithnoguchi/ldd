@@ -17,13 +17,18 @@ struct test {
 	const char	*const dev;
 	unsigned int	readers;
 	unsigned int	writers;
+};
+
+struct context {
+	const struct test	*const t;
 	pthread_mutex_t	lock;
 	pthread_cond_t	cond;
 	int		start;
 };
 
-static void *test(struct test *t, int flags)
+static void *tester(struct context *ctx, int flags)
 {
+	const struct test *const t = ctx->t;
 	char path[PATH_MAX];
 	char buf[BUFSIZ];
 	FILE *fp;
@@ -31,10 +36,10 @@ static void *test(struct test *t, int flags)
 	long val;
 
 	/* wait for the start */
-	pthread_mutex_lock(&t->lock);
-	while (!t->start)
-		pthread_cond_wait(&t->cond, &t->lock);
-	pthread_mutex_unlock(&t->lock);
+	pthread_mutex_lock(&ctx->lock);
+	while (!ctx->start)
+		pthread_cond_wait(&ctx->cond, &ctx->lock);
+	pthread_mutex_unlock(&ctx->lock);
 
 	err = snprintf(path, sizeof(path), "/sys/module/sem/parameters/default_sem_count");
 	if (err < 0)
@@ -68,18 +73,24 @@ err:
 	return (void *)EXIT_FAILURE;
 }
 
-static void *reader(void *arg)
+static void *reader(void *ctx)
 {
-	return test(arg, O_RDONLY);
+	return tester(ctx, O_RDONLY);
 }
 
-static void *writer(void *arg)
+static void *writer(void *ctx)
 {
-	return test(arg, O_WRONLY);
+	return tester(ctx, O_WRONLY);
 }
 
-static void tester(struct test *t)
+static void test(const struct test *restrict t)
 {
+	struct context ctx = {
+		.t	= t,
+		.lock	= PTHREAD_MUTEX_INITIALIZER,
+		.cond	= PTHREAD_COND_INITIALIZER,
+		.start	= 0,
+	};
 	pthread_t rids[t->readers];
 	pthread_t wids[t->writers];
 	char buf[LINE_MAX], path[PATH_MAX];
@@ -107,9 +118,8 @@ static void tester(struct test *t)
 	}
 	memset(rids, 0, sizeof(rids));
 	memset(wids, 0, sizeof(wids));
-	t->start = 0;
 	for (i = 0; i < t->readers; i++) {
-		err = pthread_create(&rids[i], NULL, reader, (void *)t);
+		err = pthread_create(&rids[i], NULL, reader, &ctx);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
@@ -117,25 +127,25 @@ static void tester(struct test *t)
 		}
 	}
 	for (i = 0; i < t->writers; i++) {
-		err = pthread_create(&wids[i], NULL, writer, (void *)t);
+		err = pthread_create(&wids[i], NULL, writer, &ctx);
 		if (err) {
 			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
 			fail++;
 			goto join;
 		}
 	}
-	err = pthread_mutex_lock(&t->lock);
+	err = pthread_mutex_lock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	t->start = 1;
-	err = pthread_mutex_unlock(&t->lock);
+	ctx.start = 1;
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&t->cond);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
@@ -218,117 +228,78 @@ int main(void)
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 0,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "one writer",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 1,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "one reader and one writer",
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 1,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "16 readers",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 0,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "16 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 16,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "16 readers and 16 writers",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 16,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "32 readers",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 0,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "32 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 32,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "32 readers and 32 writers",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 32,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "64 readers",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 0,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "64 writers",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 64,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "64 readers and 64 writers",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 64,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{
 			.name		= "256 readers and 16 writers",
 			.dev		= "sem0",
 			.readers	= 256,
 			.writers	= 16,
-			.lock		= PTHREAD_MUTEX_INITIALIZER,
-			.cond		= PTHREAD_COND_INITIALIZER,
-			.start		= 0,
 		},
 		{.name = NULL},
 	};
@@ -341,7 +312,8 @@ int main(void)
 		if (pid == -1)
 			goto perr;
 		else if (pid == 0)
-			tester((struct test *)t);
+			test(t);
+
 		ret = waitpid(pid, &status, 0);
 		if (ret == -1)
 			goto perr;
