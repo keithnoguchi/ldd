@@ -15,6 +15,7 @@ MODS  += mutex
 MODS  += comp
 MODS  += spinlock
 MODS  += rwlock
+MODS  += kfifo
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
