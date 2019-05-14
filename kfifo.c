@@ -7,6 +7,7 @@
 #include <linux/kernel.h>
 #include <linux/string.h>
 #include <linux/fs.h>
+#include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
 #include <linux/slab.h>
@@ -36,8 +37,8 @@ struct kfifo_device {
 	unsigned int		interval;	/* ms */
 	struct kfifo_context	*head;
 	struct kfifo_context	*free;
-	spinlock_t		lock;		/* kfifo lock for multiple writers */
-	DECLARE_KFIFO		(fifo, struct kfifo_message, 16);
+	spinlock_t		lock;		/* for multiple writers */
+	DECLARE_KFIFO		(fifo, struct kfifo_message, 32);
 	struct miscdevice	base;
 };
 
@@ -131,7 +132,7 @@ static int kfifo_reader(void *arg)
 		else {
 			ctx = kmalloc(sizeof(struct kfifo_context), GFP_KERNEL);
 			if (IS_ERR(ctx)) {
-				printk(KERN_CRIT "[%s:reader]: out of memory\n",
+				printk(KERN_CRIT "[%s:reader]: out of mem\n",
 				       dev_name(dev->base.this_device));
 				continue;
 			}
@@ -143,6 +144,157 @@ static int kfifo_reader(void *arg)
 	}
 	return 0;
 }
+
+static ssize_t active_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	struct kfifo_context *ctx;
+	unsigned int nr = 0;
+
+	for (ctx = dev->head; ctx; ctx = ctx->next)
+		nr += ctx->count;
+	return snprintf(page, PAGE_SIZE, "%d\n", nr);
+}
+static DEVICE_ATTR_RO(active);
+
+static ssize_t free_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	struct kfifo_context *ctx;
+	unsigned int nr = 0;
+
+	for (ctx = dev->free; ctx; ctx = ctx->next)
+		nr++;
+	return snprintf(page, PAGE_SIZE, "%d\n", nr);
+}
+static DEVICE_ATTR_RO(free);
+
+static struct attribute *kfifo_attrs[] = {
+	&dev_attr_active.attr,
+	&dev_attr_free.attr,
+	NULL,
+};
+
+static const struct attribute_group kfifo_group = {
+	.attrs	= kfifo_attrs,
+};
+
+static ssize_t fifo_initialized_show(struct device *base,
+				     struct device_attribute *attr,
+				     char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n",
+			kfifo_initialized(&dev->fifo) ? 1 : 0);
+}
+static struct device_attribute fifo_init = __ATTR(initialized, S_IRUGO,
+						  fifo_initialized_show,
+						  NULL);
+
+static ssize_t fifo_size_show(struct device *base,
+			      struct device_attribute *attr,
+			      char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", kfifo_size(&dev->fifo));
+}
+static struct device_attribute fifo_size = __ATTR(size, S_IRUGO,
+						  fifo_size_show, NULL);
+
+static ssize_t fifo_esize_show(struct device *base,
+			       struct device_attribute *attr,
+			       char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", kfifo_esize(&dev->fifo));
+}
+static struct device_attribute fifo_esize = __ATTR(esize, S_IRUGO,
+						   fifo_esize_show, NULL);
+
+static ssize_t fifo_used_show(struct device *base,
+			      struct device_attribute *attr,
+			      char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", kfifo_len(&dev->fifo));
+}
+static struct device_attribute fifo_used = __ATTR(used, S_IRUGO,
+						  fifo_used_show, NULL);
+
+static ssize_t fifo_avail_show(struct device *base,
+			       struct device_attribute *attr,
+			       char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", kfifo_avail(&dev->fifo));
+}
+static struct device_attribute fifo_available = __ATTR(available, S_IRUGO,
+						       fifo_avail_show, NULL);
+
+static ssize_t fifo_is_empty_show(struct device *base,
+				  struct device_attribute *attr,
+				  char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n",
+			kfifo_is_empty(&dev->fifo) ? 1 : 0);
+}
+static struct device_attribute fifo_is_empty = __ATTR(is_empty, S_IRUGO,
+						      fifo_is_empty_show,
+						      NULL);
+
+static ssize_t fifo_is_full_show(struct device *base,
+				 struct device_attribute *attr,
+				 char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", kfifo_is_full(&dev->fifo));
+}
+static struct device_attribute fifo_is_full = __ATTR(is_full, S_IRUGO,
+						     fifo_is_full_show,
+						     NULL);
+
+static struct attribute *kfifo_fifo_attrs[] = {
+	&fifo_init.attr,
+	&fifo_size.attr,
+	&fifo_esize.attr,
+	&fifo_used.attr,
+	&fifo_available.attr,
+	&fifo_is_empty.attr,
+	&fifo_is_full.attr,
+	NULL,
+};
+
+static const struct attribute_group kfifo_fifo_group = {
+	.name	= "fifo",
+	.attrs	= kfifo_fifo_attrs,
+};
+
+static const struct attribute_group *kfifo_groups[] = {
+	&kfifo_group,
+	&kfifo_fifo_group,
+	NULL,
+};
 
 static int __init init_driver(struct kfifo_driver *drv)
 {
@@ -174,11 +326,12 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct kfifo_device));
 		INIT_KFIFO(dev->fifo);
 		spin_lock_init(&dev->lock);
-		dev->head	= NULL;
-		dev->interval	= drv->reader_interval;
-		dev->base.name	= name;
-		dev->base.fops	= &drv->fops;
-		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		dev->head		= NULL;
+		dev->interval		= drv->reader_interval;
+		dev->base.name		= name;
+		dev->base.fops		= &drv->fops;
+		dev->base.groups	= kfifo_groups,
+		dev->base.minor		= MISC_DYNAMIC_MINOR;
 		err = misc_register(&dev->base);
 		if (err) {
 			end = dev;
@@ -190,8 +343,8 @@ static int __init init(void)
 			err = PTR_ERR(p);
 			goto err;
 		}
-		wake_up_process(p);
 		dev->reader = p;
+		wake_up_process(p);
 	}
 	return 0;
 err:

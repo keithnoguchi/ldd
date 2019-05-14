@@ -110,7 +110,7 @@ static ssize_t active_show(struct device *base,
 
 	spin_lock(&dev->lock);
 	for (ctx = dev->head; ctx; ctx = ctx->next)
-		nr++;
+		nr += ctx->count;
 	spin_unlock(&dev->lock);
 	return snprintf(page, PAGE_SIZE, "%ld\n", nr);
 }
