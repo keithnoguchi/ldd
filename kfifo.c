@@ -15,6 +15,7 @@
 #include <linux/delay.h>
 #include <linux/kthread.h>
 #include <linux/atomic.h>
+#include <linux/semaphore.h>
 #include <linux/kfifo.h>
 
 struct kfifo_context {
@@ -34,29 +35,26 @@ struct kfifo_message {
 };
 
 struct kfifo_device {
-	struct task_struct	*reader;	/* kfifo reader */
-	unsigned int		interval;	/* ms */
+	struct task_struct	*reader;	/* kfifo consumer */
 	atomic_t		alloced;
 	atomic_t		proced;
 	struct kfifo_context	*head;
 	struct kfifo_context	*free;
-	spinlock_t		lock;		/* for multiple writers */
-	DECLARE_KFIFO		(fifo, struct kfifo_message, 2048);
+	struct semaphore	avail;		/* for producer to wakeup */
+	struct semaphore	ready;		/* for consumer to wakeup */
+	spinlock_t		lock;		/* for multiple producers */
+	DECLARE_KFIFO		(fifo, struct kfifo_message, 16);
 	struct miscdevice	base;
 };
 
 static struct kfifo_driver {
-	unsigned int		reader_interval;	/* ms */
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct kfifo_device	devs[2];
 } kfifo_driver = {
-	.reader_interval	= 10, /* ms */
 	.base.name		= "kfifo",
 	.base.owner		= THIS_MODULE,
 };
-module_param_named(reader_interval, kfifo_driver.reader_interval, uint,
-		   S_IRUGO|S_IWUSR);
 
 static int open(struct inode *ip, struct file *fp)
 {
@@ -65,6 +63,9 @@ static int open(struct inode *ip, struct file *fp)
 	struct kfifo_message msg;
 	int nr;
 
+	/* sleep until queue is available */
+	if (down_interruptible(&dev->avail))
+		return -ERESTARTSYS;
 	/* to guard kfifo from multiple writers */
 	msg.type = KFIFO_MESSAGE_TYPE_OPEN;
 	msg.data = fp;
@@ -74,6 +75,8 @@ static int open(struct inode *ip, struct file *fp)
 		       dev_name(dev->base.this_device), nr);
 		return -EINVAL;
 	}
+	/* notify the reader for the new message */
+	up(&dev->ready);
 	return 0;
 }
 
@@ -84,6 +87,9 @@ static int release(struct inode *ip, struct file *fp)
 	struct kfifo_message msg;
 	int nr;
 
+	/* sleep until queue is available */
+	if (down_interruptible(&dev->avail))
+		return -ERESTARTSYS;
 	/* to guard kfifo from multiple writers */
 	msg.type = KFIFO_MESSAGE_TYPE_RELEASE;
 	msg.data = fp;
@@ -93,6 +99,8 @@ static int release(struct inode *ip, struct file *fp)
 		       dev_name(dev->base.this_device), nr);
 		return -EINVAL;
 	}
+	/* notify the reader for the new message */
+	up(&dev->ready);
 	return 0;
 }
 
@@ -105,22 +113,24 @@ static int kfifo_reader(void *arg)
 	/* multiple messages at a time */
 	while (!kthread_should_stop()) {
 		struct kfifo_context **ctxx, *ctx;
-		struct kfifo_message *msg, msgs[4];
-		int i, nr = kfifo_out(&dev->fifo, msgs, ARRAY_SIZE(msgs));
+		struct kfifo_message msg;
+		int nr;
+		if (down_interruptible(&dev->ready))
+			continue;
+		nr = kfifo_out(&dev->fifo, &msg, 1);
 		if (!nr) {
-			printk(KERN_DEBUG "[%s:reader] no data, sleep...\n",
+			printk(KERN_DEBUG "[%s:reader] no data, retry...\n",
 			       dev_name(dev->base.this_device));
-			msleep_interruptible(dev->interval);
+			if (msleep_interruptible(10))
+				break;
 			continue;
 		}
-		i = 0;
-again:
+		up(&dev->avail);
 		atomic_inc(&dev->proced);
-		msg = &msgs[i];
 		for (ctxx = &dev->head; *ctxx; ctxx = &(*ctxx)->next) {
 			ctx = *ctxx;
-			if (ctx->data == msg->data) {
-				switch (msg->type) {
+			if (ctx->data == msg.data) {
+				switch (msg.type) {
 				case KFIFO_MESSAGE_TYPE_OPEN:
 					ctx->count++;
 					break;
@@ -136,8 +146,8 @@ again:
 				break;
 			}
 		}
-		if (*ctxx || msg->type == KFIFO_MESSAGE_TYPE_RELEASE)
-			goto done;
+		if (*ctxx || msg.type == KFIFO_MESSAGE_TYPE_RELEASE)
+			continue;
 		ctx = dev->free;
 		if (ctx)
 			dev->free = ctx->next;
@@ -146,17 +156,14 @@ again:
 			if (IS_ERR(ctx)) {
 				printk(KERN_CRIT "[%s:reader]: out of mem\n",
 				       dev_name(dev->base.this_device));
-				goto done;
+				continue;
 			}
 			atomic_inc(&dev->alloced);
 		}
 		ctx->count = 1;
 		ctx->next = NULL;
-		ctx->data = msg->data;
+		ctx->data = msg.data;
 		*ctxx = ctx;
-done:
-		if (++i < nr)
-			goto again;
 	}
 	printk(KERN_DEBUG "[%s:reader] finished\n",
 	       dev_name(dev->base.this_device));
@@ -366,10 +373,11 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct kfifo_device));
 		INIT_KFIFO(dev->fifo);
 		spin_lock_init(&dev->lock);
+		sema_init(&dev->avail, kfifo_size(&dev->fifo));
+		sema_init(&dev->ready, 0);
 		atomic_set(&dev->alloced, 0);
 		atomic_set(&dev->proced, 0);
 		dev->head = dev->free	= NULL;
-		dev->interval		= drv->reader_interval;
 		dev->base.name		= name;
 		dev->base.fops		= &drv->fops;
 		dev->base.groups	= kfifo_groups,
@@ -391,8 +399,11 @@ static int __init init(void)
 	return 0;
 err:
 	for (dev = drv->devs; dev != end; dev++) {
-		if (dev->reader)
+		if (dev->reader) {
+			/* up to avoid the reader deadlock */
+			up(&dev->ready);
 			kthread_stop(dev->reader);
+		}
 		misc_deregister(&dev->base);
 	}
 	return err;
@@ -407,9 +418,12 @@ static void __exit term(void)
 
 	for (dev = drv->devs; dev != end; dev++) {
 		struct kfifo_context *ctx, *next;
-		misc_deregister(&dev->base);
-		if (dev->reader)
+		if (dev->reader) {
+			/* up to avoid the reader deadlock */
+			up(&dev->ready);
 			kthread_stop(dev->reader);
+		}
+		misc_deregister(&dev->base);
 		for (ctx = dev->head; ctx; ctx = next) {
 			next = ctx->next;
 			kfree(ctx);
