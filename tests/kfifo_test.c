@@ -50,13 +50,13 @@ static void *tester(void *arg)
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
 		goto perr;
-	if (close(fd) == -1)
-		goto perr;
 	err = pthread_yield();
 	if (err) {
 		errno = err;
 		goto perr;
 	}
+	if (close(fd) == -1)
+		goto perr;
 	pthread_exit((void *)EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -66,8 +66,8 @@ perr:
 static void test(const struct test *restrict t)
 {
 	const struct rlimit limit = {
-		.rlim_cur	= t->nr*2 > t->nr+3 ? t->nr*2 : t->nr+3,
-		.rlim_max	= t->nr*2 > t->nr+3 ? t->nr*2 : t->nr+3,
+		.rlim_cur	= t->nr*2 > 1024 ? t->nr*2 : 1024,
+		.rlim_max	= t->nr*2 > 1024 ? t->nr*2 : 1024,
 	};
 	struct context ctx = {
 		.t	= t,
@@ -164,6 +164,32 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: unexpected final active count:\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/free", t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	fprintf(stdout, "%24s: %3ld context(s) on free list\n", t->name, got);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);

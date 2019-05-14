@@ -14,6 +14,7 @@
 #include <linux/sched.h>
 #include <linux/delay.h>
 #include <linux/kthread.h>
+#include <linux/atomic.h>
 #include <linux/kfifo.h>
 
 struct kfifo_context {
@@ -35,6 +36,8 @@ struct kfifo_message {
 struct kfifo_device {
 	struct task_struct	*reader;	/* kfifo reader */
 	unsigned int		interval;	/* ms */
+	atomic_t		alloced;
+	atomic_t		proced;
 	struct kfifo_context	*head;
 	struct kfifo_context	*free;
 	spinlock_t		lock;		/* for multiple writers */
@@ -112,6 +115,7 @@ static int kfifo_reader(void *arg)
 		}
 		i = 0;
 again:
+		atomic_inc(&dev->proced);
 		msg = &msgs[i];
 		for (ctxx = &dev->head; *ctxx; ctxx = &(*ctxx)->next) {
 			ctx = *ctxx;
@@ -144,6 +148,7 @@ again:
 				       dev_name(dev->base.this_device));
 				goto done;
 			}
+			atomic_inc(&dev->alloced);
 		}
 		ctx->count = 1;
 		ctx->next = NULL;
@@ -188,9 +193,31 @@ static ssize_t free_show(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(free);
 
+static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
+			  char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->alloced));
+}
+static DEVICE_ATTR_RO(alloc);
+
+static ssize_t proc_show(struct device *base, struct device_attribute *attr,
+			 char *page)
+{
+	struct kfifo_device *dev = container_of(dev_get_drvdata(base),
+						struct kfifo_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%d\n", atomic_read(&dev->proced));
+}
+static DEVICE_ATTR_RO(proc);
+
 static struct attribute *kfifo_attrs[] = {
 	&dev_attr_active.attr,
 	&dev_attr_free.attr,
+	&dev_attr_alloc.attr,
+	&dev_attr_proc.attr,
 	NULL,
 };
 
@@ -339,6 +366,8 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct kfifo_device));
 		INIT_KFIFO(dev->fifo);
 		spin_lock_init(&dev->lock);
+		atomic_set(&dev->alloced, 0);
+		atomic_set(&dev->proced, 0);
 		dev->head = dev->free	= NULL;
 		dev->interval		= drv->reader_interval;
 		dev->base.name		= name;
@@ -377,9 +406,18 @@ static void __exit term(void)
 	struct kfifo_device *dev;
 
 	for (dev = drv->devs; dev != end; dev++) {
+		struct kfifo_context *ctx, *next;
+		misc_deregister(&dev->base);
 		if (dev->reader)
 			kthread_stop(dev->reader);
-		misc_deregister(&dev->base);
+		for (ctx = dev->head; ctx; ctx = next) {
+			next = ctx->next;
+			kfree(ctx);
+		}
+		for (ctx = dev->free; ctx; ctx = next) {
+			next = ctx->next;
+			kfree(ctx);
+		}
 	}
 }
 module_exit(term);
