@@ -9,6 +9,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include "kselftest.h"
 
 struct test {
@@ -57,6 +58,10 @@ perr:
 
 static void test(const struct test *restrict t)
 {
+	const struct rlimit limit = {
+		.rlim_cur	= t->nr*2 > 1024 ? t->nr*2 : 1024,
+		.rlim_max	= t->nr*2 > 1024 ? t->nr*2 : 1024,
+	};
 	struct context ctx = {
 		.t	= t,
 		.lock	= PTHREAD_MUTEX_INITIALIZER,
@@ -70,6 +75,9 @@ static void test(const struct test *restrict t)
 	FILE *fp;
 	long got;
 
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active", t->dev);
 	if (err < 0)
 		goto perr;
@@ -151,7 +159,7 @@ static void test(const struct test *restrict t)
 	if (err == 0 && ferror(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
-	fprintf(stdout, "%24s: %3ld context(s) on free list\n", t->name, got);
+	fprintf(stdout, "%25s: %3ld context(s) on free list\n", t->name, got);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -206,6 +214,11 @@ int main(void)
 			.name	= "512 thread(s) on rwlock0",
 			.dev	= "rwlock0",
 			.nr	= 512,
+		},
+		{
+			.name	= "1024 thread(s) on rwlock1",
+			.dev	= "rwlock1",
+			.nr	= 1024,
 		},
 		{.name = NULL},
 	};
