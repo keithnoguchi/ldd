@@ -38,7 +38,7 @@ struct kfifo_device {
 	struct kfifo_context	*head;
 	struct kfifo_context	*free;
 	spinlock_t		lock;		/* for multiple writers */
-	DECLARE_KFIFO		(fifo, struct kfifo_message, 32);
+	DECLARE_KFIFO		(fifo, struct kfifo_message, 2048);
 	struct miscdevice	base;
 };
 
@@ -97,19 +97,26 @@ static int kfifo_reader(void *arg)
 {
 	struct kfifo_device *dev = arg;
 
-	/* one message at a time */
+	printk(KERN_DEBUG "[%s:reader] started\n",
+	       dev_name(dev->base.this_device));
+	/* multiple messages at a time */
 	while (!kthread_should_stop()) {
 		struct kfifo_context **ctxx, *ctx;
-		struct kfifo_message msg;
-		int nr = kfifo_out(&dev->fifo, &msg, 1);
+		struct kfifo_message *msg, msgs[4];
+		int i, nr = kfifo_out(&dev->fifo, msgs, ARRAY_SIZE(msgs));
 		if (!nr) {
+			printk(KERN_DEBUG "[%s:reader] no data, sleep...\n",
+			       dev_name(dev->base.this_device));
 			msleep_interruptible(dev->interval);
 			continue;
 		}
+		i = 0;
+again:
+		msg = &msgs[i];
 		for (ctxx = &dev->head; *ctxx; ctxx = &(*ctxx)->next) {
 			ctx = *ctxx;
-			if (ctx->data == msg.data) {
-				switch (msg.type) {
+			if (ctx->data == msg->data) {
+				switch (msg->type) {
 				case KFIFO_MESSAGE_TYPE_OPEN:
 					ctx->count++;
 					break;
@@ -117,15 +124,16 @@ static int kfifo_reader(void *arg)
 					ctx->count--;
 					if (ctx->count)
 						break;
+					*ctxx = ctx->next;
 					ctx->next = dev->free;
 					dev->free = ctx;
 					break;
 				}
-				continue;
+				break;
 			}
 		}
-		if (msg.type != KFIFO_MESSAGE_TYPE_OPEN)
-			continue;
+		if (*ctxx || msg->type == KFIFO_MESSAGE_TYPE_RELEASE)
+			goto done;
 		ctx = dev->free;
 		if (ctx)
 			dev->free = ctx->next;
@@ -134,14 +142,19 @@ static int kfifo_reader(void *arg)
 			if (IS_ERR(ctx)) {
 				printk(KERN_CRIT "[%s:reader]: out of mem\n",
 				       dev_name(dev->base.this_device));
-				continue;
+				goto done;
 			}
 		}
 		ctx->count = 1;
 		ctx->next = NULL;
-		ctx->data = msg.data;
+		ctx->data = msg->data;
 		*ctxx = ctx;
+done:
+		if (++i < nr)
+			goto again;
 	}
+	printk(KERN_DEBUG "[%s:reader] finished\n",
+	       dev_name(dev->base.this_device));
 	return 0;
 }
 
@@ -326,7 +339,7 @@ static int __init init(void)
 		memset(dev, 0, sizeof(struct kfifo_device));
 		INIT_KFIFO(dev->fifo);
 		spin_lock_init(&dev->lock);
-		dev->head		= NULL;
+		dev->head = dev->free	= NULL;
 		dev->interval		= drv->reader_interval;
 		dev->base.name		= name;
 		dev->base.fops		= &drv->fops;

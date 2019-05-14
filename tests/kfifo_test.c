@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <poll.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -24,6 +25,12 @@ struct context {
 	pthread_cond_t		cond;
 	int			start;
 };
+
+static void msleep(unsigned int msec)
+{
+	if (poll(NULL, 0, msec) == -1)
+		perror("poll");
+}
 
 static void *tester(void *arg)
 {
@@ -69,11 +76,33 @@ static void test(const struct test *restrict t)
 		.start	= 0,
 	};
 	pthread_t testers[t->nr];
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
 	int i, err;
+	FILE *fp;
+	long got;
 
 	err = setrlimit(RLIMIT_NOFILE, &limit);
 	if (err == -1)
 		goto perr;
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/fifo/used",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: initial fifo is not empty\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
 	memset(testers, 0, sizeof(testers));
 	for (i = 0; i < t->nr; i++) {
 		err = pthread_create(&testers[i], NULL, tester, &ctx);
@@ -114,6 +143,26 @@ static void test(const struct test *restrict t)
 		}
 		if (retp != EXIT_SUCCESS)
 			goto err;
+	}
+	/* wait for the kthread cleansup the queue */
+	msleep(50);
+	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/fifo/used",
+		       t->dev);
+	if (err < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	err = fread(buf, sizeof(buf), 1, fp);
+	if (err == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: final fifo is not empty\n\t- want: 0\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
 	}
 	exit(EXIT_SUCCESS);
 perr:

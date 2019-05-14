@@ -46,6 +46,8 @@
   - [spinlock_test.c](tests/spinlock_test.c): spinlock.c unit test
 - [rwlock.c](rwlock.c): rwlock_t test module
   - [rwlock_test.c](tests/rwlock_test.c): rwlock.c unit test
+- [kfifo.c](kfifo.c): <linux/kfifo.h> test module
+  - [kfifo_test.c](tests/kfifo_test.c): kfifo.c unit test
 
 ## Build
 
