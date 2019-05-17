@@ -20,8 +20,6 @@ struct seqlock_context {
 
 struct seqlock_device {
 	seqlock_t		lock;
-	unsigned int		actives;
-	unsigned int		frees;
 	struct seqlock_context	*head;
 	struct seqlock_context	*free;
 	struct miscdevice	base;
@@ -45,13 +43,14 @@ static int open(struct inode *ip, struct file *fp)
 	int err = 0;
 
 	if ((fp->f_flags&O_ACCMODE) == O_RDONLY) {
-		unsigned int seq, actives, frees;
-		/* keep retrying to get the number of writers until
-		 * we won't have any concurrent writers */
+		/* count the current active contexts by going through
+		 * the linked-list.  This works as long as the context
+		 * is not freed */
+		unsigned int seq, actives;
 		do {
 			seq = read_seqbegin(&dev->lock);
-			actives	= dev->actives;
-			frees	= dev->frees;
+			for (ctx = dev->head; ctx; ctx = ctx->next)
+				actives++;
 		} while (read_seqretry(&dev->lock, seq));
 		return 0;
 	}
@@ -63,10 +62,9 @@ static int open(struct inode *ip, struct file *fp)
 		}
 	/* new entry */
 	ctx = dev->free;
-	if (ctx) {
+	if (ctx)
 		dev->free = ctx->next;
-		dev->frees--;
-	} else {
+	else {
 		ctx = kmalloc(sizeof(struct seqlock_device), GFP_KERNEL);
 		if (IS_ERR(ctx)) {
 			err = PTR_ERR(ctx);
@@ -78,7 +76,6 @@ static int open(struct inode *ip, struct file *fp)
 	ctx->data = fp;
 	*ctxx = ctx;
 out:
-	dev->actives++;
 	write_sequnlock(&dev->lock);
 	return err;
 }
@@ -92,11 +89,14 @@ static int release(struct inode *ip, struct file *fp)
 	int err = 0;
 
 	if ((fp->f_flags&O_ACCMODE) == O_RDONLY) {
-		unsigned int seq, actives, frees;
+		/* counts the current active contexts by going through
+		 * the linked-list.  This works as long as the context
+		 * is not freed */
+		unsigned int seq, actives;
 		do {
 			seq = read_seqbegin(&dev->lock);
-			actives	= dev->actives;
-			frees	= dev->frees;
+			for (ctx = dev->head; ctx; ctx = ctx->next)
+				actives++;
 		} while (read_seqretry(&dev->lock, seq));
 		return 0;
 	}
@@ -104,12 +104,10 @@ static int release(struct inode *ip, struct file *fp)
 	for (ctxx = &dev->head; *ctxx; ctxx = &(*ctxx)->next)
 		if ((*ctxx)->data == fp) {
 			ctx = *ctxx;
-			dev->actives--;
 			if (!--ctx->count) {
 				*ctxx = ctx->next;
 				ctx->next = dev->free;
 				dev->free = ctx;
-				dev->frees++;
 			}
 			goto out;
 		}
@@ -128,8 +126,14 @@ static ssize_t active_show(struct device *base, struct device_attribute *attr,
 						  base);
 	unsigned int seq, nr;
 	do {
+		/* counts the current active contexts by going through
+		 * the linked-list.  This works as long as the context
+		 * is not freed */
+		struct seqlock_context *ctx;
 		seq = read_seqbegin(&dev->lock);
-		nr = dev->actives;
+		nr = 0;
+		for (ctx = dev->head; ctx; ctx = ctx->next)
+			nr++;
 	} while (read_seqretry(&dev->lock, seq));
 	return snprintf(page, PAGE_SIZE, "%u\n", nr);
 }
@@ -143,8 +147,13 @@ static ssize_t free_show(struct device *base, struct device_attribute *attr,
 						  base);
 	unsigned int seq, nr;
 	do {
+		/* counts the free contexts by going through the linked-list.
+		 * This works as long as the context is not freed */
+		struct seqlock_context *ctx;
 		seq = read_seqbegin(&dev->lock);
-		nr = dev->frees;
+		nr = 0;
+		for (ctx = dev->free; ctx; ctx = ctx->next)
+			nr++;
 	} while (read_seqretry(&dev->lock, seq));
 	return snprintf(page, PAGE_SIZE, "%u\n", nr);
 }
