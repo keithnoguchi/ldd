@@ -16,6 +16,7 @@ MODS  += comp
 MODS  += spinlock
 MODS  += rwlock
 MODS  += kfifo
+MODS  += seqlock
 MODS  += sleepy
 # ldd bus based drivers
 MODS  += ldd
