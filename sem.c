@@ -95,6 +95,7 @@ ATTRIBUTE_GROUPS(sem);
 static int __init init_driver(struct sem_driver *drv)
 {
 	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner		= drv->base.owner;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 	return 0;
