@@ -50,6 +50,8 @@
   - [kfifo_test.c](tests/kfifo_test.c): kfifo.c unit test
 - [seqlock.c](seqlock.c): <linux/seqlock.h> test module
   - [seqlock_test.c](tests/eqlock_test.c): seqlock.c unit test
+- [rculock.c](rculock.c): <linux/rcupdate.h> test module
+  - [rculock_test.c](tests/rculock_test.c): rculock.c unit test
 
 ## Build
 
