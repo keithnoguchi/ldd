@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -58,9 +59,10 @@ perr:
 
 static void test(const struct test *restrict t)
 {
+	unsigned int nr = t->nr*2;
 	const struct rlimit limit = {
-		.rlim_cur	= t->nr*2 > 1024 ? t->nr*2 : 1024,
-		.rlim_max	= t->nr*2 > 1024 ? t->nr*2 : 1024,
+		.rlim_cur	= nr > 1024 ? nr : 1024,
+		.rlim_max	= nr > 1024 ? nr : 1024,
 	};
 	struct context ctx = {
 		.t	= t,
@@ -68,16 +70,13 @@ static void test(const struct test *restrict t)
 		.cond	= PTHREAD_COND_INITIALIZER,
 		.start	= 0,
 	};
-	pthread_t lockers[t->nr];
-	char path[PATH_MAX];
-	char buf[BUFSIZ];
+	pthread_t testers[t->nr];
+	char buf[BUFSIZ], path[PATH_MAX];
+	cpu_set_t cpus;
 	int i, err;
 	FILE *fp;
-	long val;
+	long got;
 
-	err = setrlimit(RLIMIT_NOFILE, &limit);
-	if (err == -1)
-		goto perr;
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
 		       t->dev);
 	if (err < 0)
@@ -90,15 +89,32 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected initial active contexts\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
-	memset(lockers, 0, sizeof(lockers));
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
+	CPU_ZERO(&cpus);
+	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (err == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
+	memset(testers, 0, sizeof(testers));
 	for (i = 0; i < t->nr; i++) {
-		err = pthread_create(&lockers[i], NULL, tester, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&testers[i], &attr, tester, &ctx);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -110,21 +126,21 @@ static void test(const struct test *restrict t)
 		goto perr;
 	}
 	ctx.start = 1;
-	err = pthread_mutex_unlock(&ctx.lock);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&ctx.cond);
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
 	for (i = 0; i < t->nr; i++) {
 		void *retp = NULL;
-		if (!lockers[i])
+		if (!testers[i])
 			continue;
-		err = pthread_join(lockers[i], &retp);
+		err = pthread_join(testers[i], &retp);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -144,10 +160,10 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected final active contexts\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/free",
@@ -162,9 +178,9 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
-	val = strtol(buf, NULL, 10);
+	got = strtol(buf, NULL, 10);
 	fprintf(stdout, "%27s: %3ld context(s) on free list\n",
-		t->name, val);
+		t->name, got);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);

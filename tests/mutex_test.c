@@ -5,10 +5,12 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include "kselftest.h"
 
 struct test {
@@ -68,20 +70,23 @@ static void *writer(void *ctx)
 
 static void test(const struct test *restrict t)
 {
+	unsigned int nr = (t->readers+t->writers)*2;
+	const struct rlimit limit = {
+		.rlim_cur	= nr > 1024 ? nr : 1024,
+		.rlim_max	= nr > 1024 ? nr : 1024,
+	};
 	struct context ctx = {
 		.t	= t,
 		.lock	= PTHREAD_MUTEX_INITIALIZER,
 		.cond	= PTHREAD_COND_INITIALIZER,
 		.start	= 0,
 	};
-	pthread_t readers[t->readers];
-	pthread_t writers[t->writers];
-	char path[PATH_MAX];
-	char buf[LINE_MAX];
-	int fail = 0;
+	pthread_t readers[t->readers], writers[t->writers];
+	char buf[LINE_MAX], path[PATH_MAX];
+	cpu_set_t cpus;
 	int i, err;
 	FILE *fp;
-	long val;
+	long got;
 
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
@@ -94,30 +99,52 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected initial lockers value: %ld!=0\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
+	CPU_ZERO(&cpus);
+	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (err == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
 	memset(readers, 0, sizeof(readers));
 	memset(writers, 0, sizeof(writers));
 	for (i = 0; i < t->readers; i++) {
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
 		err = pthread_create(&readers[i], NULL, reader, &ctx);
 		if (err) {
-			fail++;
 			errno = err;
-			perror(t->name);
-			goto join;
+			goto perr;
 		}
 	}
 	for (i = 0; i < t->writers; i++) {
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
 		err = pthread_create(&writers[i], NULL, writer, &ctx);
 		if (err) {
-			fail++;
 			errno = err;
-			perror(t->name);
-			goto join;
+			goto perr;
 		}
 	}
 	err = pthread_mutex_lock(&ctx.lock);
@@ -126,12 +153,12 @@ static void test(const struct test *restrict t)
 		goto perr;
 	}
 	ctx.start = 1;
-	err = pthread_mutex_unlock(&ctx.lock);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&ctx.cond);
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
@@ -155,22 +182,20 @@ static void test(const struct test *restrict t)
 	}
 	if (fclose(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	fprintf(stdout, "%s:\n\tlockers: %ld\n", t->name, val);
+	got = strtol(buf, NULL, 10);
+	fprintf(stdout, "%s:\n\tlockers: %ld\n", t->name, got);
 	fflush(stdout);
-join:
 	for (i = 0; i < t->readers; i++) {
 		void *retp = NULL;
 		if (!readers[i])
 			continue;
 		err = pthread_join(readers[i], &retp);
 		if (err) {
-			fail++;
 			errno = err;
-			perror(t->name);
+			goto perr;
 		}
 		if (retp != (void *)EXIT_SUCCESS)
-			fail++;
+			goto err;
 	}
 	for (i = 0; i < t->writers; i++) {
 		void *retp = NULL;
@@ -178,12 +203,11 @@ join:
 			continue;
 		err = pthread_join(writers[i], &retp);
 		if (err) {
-			fail++;
 			errno = err;
-			perror(t->name);
+			goto perr;
 		}
 		if (retp != (void *)EXIT_SUCCESS)
-			fail++;
+			goto err;
 	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
@@ -196,14 +220,12 @@ join:
 		goto perr;
 	if (fclose(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected final lockers value: %ld!=0\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
-	if (fail)
-		goto err;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);

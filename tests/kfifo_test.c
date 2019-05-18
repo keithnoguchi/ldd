@@ -3,9 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <errno.h>
-#include <poll.h>
+#include <sched.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -65,9 +66,10 @@ perr:
 
 static void test(const struct test *restrict t)
 {
+	unsigned int nr = t->nr*2;
 	const struct rlimit limit = {
-		.rlim_cur	= t->nr*2 > 1024 ? t->nr*2 : 1024,
-		.rlim_max	= t->nr*2 > 1024 ? t->nr*2 : 1024,
+		.rlim_cur	= nr > 1024 ? nr : 1024,
+		.rlim_max	= nr > 1024 ? nr : 1024,
 	};
 	struct context ctx = {
 		.t	= t,
@@ -76,15 +78,12 @@ static void test(const struct test *restrict t)
 		.start	= 0,
 	};
 	pthread_t testers[t->nr];
-	char path[PATH_MAX];
-	char buf[BUFSIZ];
+	char buf[BUFSIZ], path[PATH_MAX];
+	cpu_set_t cpus;
 	int i, err;
 	FILE *fp;
 	long got;
 
-	err = setrlimit(RLIMIT_NOFILE, &limit);
-	if (err == -1)
-		goto perr;
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/fifo/used",
 		       t->dev);
 	if (err < 0)
@@ -103,9 +102,26 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
+	CPU_ZERO(&cpus);
+	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (err == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
 	memset(testers, 0, sizeof(testers));
 	for (i = 0; i < t->nr; i++) {
-		err = pthread_create(&testers[i], NULL, tester, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&testers[i], &attr, tester, &ctx);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -122,12 +138,12 @@ static void test(const struct test *restrict t)
 		goto perr;
 	}
 	ctx.start = 1;
-	err = pthread_mutex_unlock(&ctx.lock);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&ctx.cond);
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;

@@ -5,11 +5,12 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include "kselftest.h"
 
 struct test {
@@ -21,19 +22,18 @@ struct test {
 
 struct context {
 	const struct test	*const t;
-	pthread_mutex_t	lock;
-	pthread_cond_t	cond;
-	int		start;
+	pthread_mutex_t		lock;
+	pthread_cond_t		cond;
+	int			start;
 };
 
 static void *tester(struct context *ctx, int flags)
 {
 	const struct test *const t = ctx->t;
-	char path[PATH_MAX];
-	char buf[BUFSIZ];
-	FILE *fp;
+	char buf[BUFSIZ], path[PATH_MAX];
 	int err, fd;
-	long val;
+	FILE *fp;
+	long got;
 
 	/* wait for the start */
 	pthread_mutex_lock(&ctx->lock);
@@ -50,10 +50,10 @@ static void *tester(struct context *ctx, int flags)
 	fread(buf, sizeof(buf), 1, fp);
 	if (ferror(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 1) {
+	got = strtol(buf, NULL, 10);
+	if (got != 1) {
 		fprintf(stderr, "%s: unexpected default semaphore count:\n\t- want: 1\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
 	if (fclose(fp))
@@ -85,19 +85,23 @@ static void *writer(void *ctx)
 
 static void test(const struct test *restrict t)
 {
+	unsigned int nr = (t->readers+t->writers)*2;
+	const struct rlimit limit = {
+		.rlim_cur	= nr > 1024 ? nr : 1024,
+		.rlim_max	= nr > 1024 ? nr : 1024,
+	};
 	struct context ctx = {
 		.t	= t,
 		.lock	= PTHREAD_MUTEX_INITIALIZER,
 		.cond	= PTHREAD_COND_INITIALIZER,
 		.start	= 0,
 	};
-	pthread_t rids[t->readers];
-	pthread_t wids[t->writers];
+	pthread_t readers[t->readers], writers[t->writers];
 	char buf[LINE_MAX], path[PATH_MAX];
-	int fail = 0;
+	cpu_set_t cpus;
 	int i, err;
 	FILE *fp;
-	long val;
+	long got;
 
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
@@ -110,28 +114,52 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected beginning lock count:\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
-	memset(rids, 0, sizeof(rids));
-	memset(wids, 0, sizeof(wids));
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
+	CPU_ZERO(&cpus);
+	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (err == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
+	memset(readers, 0, sizeof(readers));
+	memset(writers, 0, sizeof(writers));
 	for (i = 0; i < t->readers; i++) {
-		err = pthread_create(&rids[i], NULL, reader, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
 		if (err) {
-			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
-			fail++;
-			goto join;
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&readers[i], &attr, reader, &ctx);
+		if (err) {
+			errno = err;
+			goto perr;
 		}
 	}
 	for (i = 0; i < t->writers; i++) {
-		err = pthread_create(&wids[i], NULL, writer, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
 		if (err) {
-			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
-			fail++;
-			goto join;
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&writers[i], &attr, writer, &ctx);
+		if (err) {
+			errno = err;
+			goto perr;
 		}
 	}
 	err = pthread_mutex_lock(&ctx.lock);
@@ -140,12 +168,12 @@ static void test(const struct test *restrict t)
 		goto perr;
 	}
 	ctx.start = 1;
-	err = pthread_mutex_unlock(&ctx.lock);
+	err = pthread_cond_broadcast(&ctx.cond);
 	if (err) {
 		errno = err;
 		goto perr;
 	}
-	err = pthread_cond_broadcast(&ctx.cond);
+	err = pthread_mutex_unlock(&ctx.lock);
 	if (err) {
 		errno = err;
 		goto perr;
@@ -166,33 +194,32 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp))
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	fprintf(stdout, "%s:\n\tlockers: %ld\n", t->name, val);
+	got = strtol(buf, NULL, 10);
+	fprintf(stdout, "%34s: %2ld locker(s)\n", t->name, got);
 	fflush(stdout);
-join:
 	for (i = 0; i < t->readers; i++) {
 		void *retp = NULL;
-		if (!rids[i])
+		if (!readers[i])
 			continue;
-		err = pthread_join(rids[i], &retp);
+		err = pthread_join(readers[i], &retp);
 		if (err) {
-			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
-			fail++;
+			errno = err;
+			goto perr;
 		}
 		if (retp != (void *)EXIT_SUCCESS)
-			fail++;
+			goto err;
 	}
 	for (i = 0; i < t->writers; i++) {
 		void *retp = NULL;
-		if (!wids[i])
+		if (!writers[i])
 			continue;
-		err = pthread_join(wids[i], &retp);
+		err = pthread_join(writers[i], &retp);
 		if (err) {
-			fprintf(stderr, "%s: %s\n", t->name, strerror(err));
-			fail++;
+			errno = err;
+			goto perr;
 		}
 		if (retp != (int *)EXIT_SUCCESS)
-			fail++;
+			goto err;
 	}
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers", t->dev);
 	if (err < 0)
@@ -203,16 +230,14 @@ join:
 	err = fread(buf, sizeof(buf), 1, fp);
 	if (err == 0 && ferror(fp))
 		goto perr;
-	if (fclose(fp))
+	if (fclose(fp) == -1)
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected ending lock count:\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
-	if (fail)
-		goto err;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -224,79 +249,79 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "one reader",
+			.name		= "1 reader on sem0",
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 0,
 		},
 		{
-			.name		= "one writer",
+			.name		= "1 writer on sem0",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 1,
 		},
 		{
-			.name		= "one reader and one writer",
+			.name		= "1 reader and 1 writer on sem0",
 			.dev		= "sem0",
 			.readers	= 1,
 			.writers	= 1,
 		},
 		{
-			.name		= "16 readers",
+			.name		= "16 readers on sem0",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 0,
 		},
 		{
-			.name		= "16 writers",
+			.name		= "16 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 16,
 		},
 		{
-			.name		= "16 readers and 16 writers",
+			.name		= "16 readers and 16 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 16,
 			.writers	= 16,
 		},
 		{
-			.name		= "32 readers",
+			.name		= "32 readers on sem0",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 0,
 		},
 		{
-			.name		= "32 writers",
+			.name		= "32 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 32,
 		},
 		{
-			.name		= "32 readers and 32 writers",
+			.name		= "32 readers and 32 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 32,
 			.writers	= 32,
 		},
 		{
-			.name		= "64 readers",
+			.name		= "64 readers on sem0",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 0,
 		},
 		{
-			.name		= "64 writers",
+			.name		= "64 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 0,
 			.writers	= 64,
 		},
 		{
-			.name		= "64 readers and 64 writers",
+			.name		= "64 readers and 64 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 64,
 			.writers	= 64,
 		},
 		{
-			.name		= "256 readers and 16 writers",
+			.name		= "256 readers and 16 writers on sem0",
 			.dev		= "sem0",
 			.readers	= 256,
 			.writers	= 16,

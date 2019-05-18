@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
-#include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/resource.h>
 #include "kselftest.h"
 
 struct test {
@@ -19,11 +19,24 @@ struct test {
 	unsigned int	waiters;
 };
 
+struct context {
+	const struct test	*const t;
+	pthread_mutex_t		lock;
+	pthread_cond_t		cond;
+	int			start;
+};
+
 static void *tester(void *arg)
 {
-	const struct test *t = arg;
+	struct context *ctx = arg;
+	const struct test *t = ctx->t;
 	char path[PATH_MAX];
 	int err, fd;
+
+	pthread_mutex_lock(&ctx->lock);
+	while (!ctx->start)
+		pthread_cond_wait(&ctx->cond, &ctx->lock);
+	pthread_mutex_unlock(&ctx->lock);
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
@@ -42,13 +55,24 @@ perr:
 
 static void test(const struct test *restrict t)
 {
+	unsigned int nr = t->waiters*2;
+	const struct rlimit limit = {
+		.rlim_cur	= nr > 1024 ? nr : 1024,
+		.rlim_max	= nr > 1024 ? nr : 1024,
+	};
+	struct context ctx = {
+		.t	= t,
+		.lock	= PTHREAD_MUTEX_INITIALIZER,
+		.cond	= PTHREAD_COND_INITIALIZER,
+		.start	= 0,
+	};
 	pthread_t waiters[t->waiters];
-	char path[PATH_MAX];
-	char buf[BUFSIZ];
+	char buf[BUFSIZ], path[PATH_MAX];
+	cpu_set_t cpus;
 	int i, err, fd;
 	void *retp;
-	long val;
 	FILE *fp;
+	long got;
 
 	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (err < 0)
@@ -56,13 +80,46 @@ static void test(const struct test *restrict t)
 	fd = open(path, O_WRONLY);
 	if (fd == -1)
 		goto perr;
+	err = setrlimit(RLIMIT_NOFILE, &limit);
+	if (err == -1)
+		goto perr;
+	CPU_ZERO(&cpus);
+	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (err == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
 	memset(waiters, 0, sizeof(waiters));
 	for (i = 0; i < t->waiters; i++) {
-		err = pthread_create(&waiters[i], NULL, tester, (void *)t);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
+						  &cpus);
 		if (err) {
 			errno = err;
 			goto perr;
 		}
+		err = pthread_create(&waiters[i], &attr, tester, &ctx);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+	}
+	err = pthread_mutex_lock(&ctx.lock);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	ctx.start = 1;
+	err = pthread_cond_broadcast(&ctx.cond);
+	if (err) {
+		errno = err;
+		goto perr;
+	}
+	err = pthread_mutex_unlock(&ctx.lock);
+	if (err) {
+		errno = err;
+		goto perr;
 	}
 	/* wait for all the waiters */
 	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
@@ -80,8 +137,8 @@ static void test(const struct test *restrict t)
 			goto perr;
 		if (fclose(fp) == -1)
 			goto perr;
-		val = strtol(buf, NULL, 10);
-	} while (val < t->waiters);
+		got = strtol(buf, NULL, 10);
+	} while (got < t->waiters);
 
 	/* notify the completion to all the waiters */
 	for (i = 0; i < t->waiters; i++) {
@@ -117,10 +174,10 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
-	val = strtol(buf, NULL, 10);
-	if (val != 0) {
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
 		fprintf(stderr, "%s: unexpected number of waiters:\n\t- want: 0\n\t-  got: %ld\n",
-			t->name, val);
+			t->name, got);
 		goto err;
 	}
 	if (close(fd) == -1)
