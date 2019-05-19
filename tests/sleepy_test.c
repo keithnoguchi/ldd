@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
 #include "kselftest.h"
 
 static int test_open(const char *path, int flags)
@@ -24,18 +23,18 @@ static int test_sleepy_open(void)
 		int		flags;
 	} *t, tests[] = {
 		{
-			.name	= "sleepy1 read only open",
-			.path	= "/dev/sleepy1",
+			.name	= "sleepy0 read only open",
+			.path	= "/dev/sleepy0",
 			.flags	= O_RDONLY,
 		},
 		{
-			.name	= "sleepy1 write only open",
-			.path	= "/dev/sleepy1",
+			.name	= "sleepy0 write only open",
+			.path	= "/dev/sleepy0",
 			.flags	= O_WRONLY,
 		},
 		{
-			.name	= "sleepy1 read-write open",
-			.path	= "/dev/sleepy1",
+			.name	= "sleepy0 read-write open",
+			.path	= "/dev/sleepy0",
 			.flags	= O_RDWR,
 		},
 		{.name = NULL},	/* sentry */

@@ -1,114 +1,91 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+#include <linux/init.h>
 #include <linux/types.h>
-#include <linux/kernel.h>
-#include <linux/device.h>
 #include <linux/module.h>
-#include <linux/miscdevice.h>
+#include <linux/kernel.h>
 #include <linux/fs.h>
-#include <linux/wait.h>
-#include <linux/semaphore.h>
+#include <linux/sysfs.h>
+#include <linux/device.h>
+#include <linux/miscdevice.h>
 
 struct sleepy_device {
-	struct semaphore	lock;
-	int			condition;
-	wait_queue_head_t	wq;
-	struct miscdevice	dev;
+	struct miscdevice	base;
 };
 
-/* sleep device file operations */
-static ssize_t sleepy_read(struct file *f, char __user *buf, size_t nr, loff_t *pos)
+static struct sleepy_driver {
+	struct file_operations	fops;
+	struct device_driver	base;
+	struct sleepy_device	devs[1];
+} sleepy_driver = {
+	.base.name	= "sleepy",
+	.base.owner	= THIS_MODULE,
+};
+
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
-	struct sleepy_device *d = container_of(f->private_data, struct sleepy_device, dev);
-	struct device *dev = d->dev.this_device;
-
-	if (down_interruptible(&d->lock))
-		return -ERESTARTSYS;
-	while (!d->condition) {
-		up(&d->lock);
-		if (wait_event_interruptible(d->wq, d->condition))
-			return -ERESTARTSYS;
-		if (down_interruptible(&d->lock))
-			return -ERESTARTSYS;
-	}
-	printk(KERN_INFO "read(%s)\n", dev_name(dev));
-	d->condition = 0;
-	up(&d->lock);
-
 	return 0;
 }
 
-static ssize_t sleepy_write(struct file *f, const char __user *buf, size_t nr, loff_t *pos)
+static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
-	struct sleepy_device *d = container_of(f->private_data, struct sleepy_device, dev);
-	struct device *dev = d->dev.this_device;
-	printk(KERN_INFO "write(%s)\n", dev_name(dev));
 	return 0;
 }
 
-static int sleepy_release(struct inode *i, struct file *f)
+static int __init init_driver(struct sleepy_driver *drv)
 {
-	struct sleepy_device *d = container_of(f->private_data, struct sleepy_device, dev);
-	struct device *dev = d->dev.this_device;
-	printk(KERN_INFO "release(%s)\n", dev_name(dev));
+	memset(&drv->fops, 0, sizeof(struct file_operations));
+	drv->fops.owner	= drv->base.owner;
+	drv->fops.read	= read;
+	drv->fops.write	= write;
 	return 0;
 }
-
-static const struct file_operations sleepy_fops = {
-	.read		= sleepy_read,
-	.write		= sleepy_write,
-	.release	= sleepy_release,
-};
-
-/* miscdevice based sleepy device */
-static struct sleepy_device devices[] = {
-	{
-		.dev.minor	= MISC_DYNAMIC_MINOR,
-		.dev.name	= "sleepy0",
-		.dev.fops	= &sleepy_fops,
-	},
-	{
-		.dev.minor	= MISC_DYNAMIC_MINOR,
-		.dev.name	= "sleepy1",
-		.dev.fops	= &sleepy_fops,
-	},
-	{},	/* sentry */
-};
 
 static int __init init(void)
 {
-	struct sleepy_device *d, *d_err;
-	int err;
+	struct sleepy_driver *drv = &sleepy_driver;
+	struct sleepy_device *end = drv->devs+ARRAY_SIZE(drv->devs);
+	struct sleepy_device *dev;
+	char name[8]; /* strlen(drv->base.name)+2 */
+	int i, err;
 
-	for (d = devices; d->dev.name; d++) {
-		sema_init(&d->lock, 1);
-		d->condition = 0;
-		init_waitqueue_head(&d->wq);
-		if ((err = misc_register(&d->dev))) {
-			d_err = d;
+	err = init_driver(drv);
+	if (err)
+		return err;
+	for (dev = drv->devs, i = 0; dev != end; dev++, i++) {
+		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
+		if (err < 0) {
+			end = dev;
+			goto err;
+		}
+		memset(dev, 0, sizeof(struct sleepy_device));
+		dev->base.name	= name;
+		dev->base.fops	= &drv->fops;
+		dev->base.minor	= MISC_DYNAMIC_MINOR;
+		err = misc_register(&dev->base);
+		if (err) {
+			end = dev;
 			goto err;
 		}
 	}
 	return 0;
 err:
-	for (d = devices; d != d_err; d++)
-		misc_deregister(&d->dev);
+	for (dev = drv->devs; dev != end; dev++)
+		misc_deregister(&dev->base);
 	return err;
 }
 module_init(init);
 
 static void __exit term(void)
 {
-	struct sleepy_device *d;
+	struct sleepy_driver *drv = &sleepy_driver;
+	struct sleepy_device *end = drv->devs+ARRAY_SIZE(drv->devs);
+	struct sleepy_device *dev;
 
-	for (d = devices; d->dev.name; d++) {
-		down(&d->lock);
-		wake_up_all(&d->wq);
-		up(&d->lock);
-		misc_deregister(&d->dev);
-	}
+	for (dev = drv->devs; dev != end; dev++)
+		misc_deregister(&dev->base);
 }
 module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Sleepy Device");
+MODULE_DESCRIPTION("<linux/wait.h> test module");
