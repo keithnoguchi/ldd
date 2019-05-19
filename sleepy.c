@@ -7,8 +7,13 @@
 #include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/miscdevice.h>
+#include <linux/mutex.h>
+#include <linux/wait.h>
 
 struct sleepy_device {
+	wait_queue_head_t	wq;
+	struct mutex		lock;
+	int			ready;
 	struct miscdevice	base;
 };
 
@@ -23,12 +28,35 @@ static struct sleepy_driver {
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
-	return 0;
+	struct sleepy_device *dev = container_of(fp->private_data,
+						 struct sleepy_device,
+						 base);
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	while (!dev->ready) {
+		mutex_unlock(&dev->lock);
+		if (wait_event_interruptible(dev->wq, dev->ready))
+			return -ERESTARTSYS;
+		mutex_lock(&dev->lock);
+	}
+	dev->ready = 0;
+	mutex_unlock(&dev->lock);
+	return 0; /* EOF */
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
-	return 0;
+	struct sleepy_device *dev = container_of(fp->private_data,
+						 struct sleepy_device,
+						 base);
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	dev->ready = 1;
+	mutex_unlock(&dev->lock);
+	wake_up_interruptible(&dev->wq);
+	return count; /* avoid retry */
 }
 
 static int __init init_driver(struct sleepy_driver *drv)
@@ -58,6 +86,9 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct sleepy_device));
+		init_waitqueue_head(&dev->wq);
+		mutex_init(&dev->lock);
+		dev->ready	= 0;
 		dev->base.name	= name;
 		dev->base.fops	= &drv->fops;
 		dev->base.minor	= MISC_DYNAMIC_MINOR;
