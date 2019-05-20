@@ -132,10 +132,11 @@ static void test(const struct test *restrict t)
 	memset(writers, 0, sizeof(writers));
 	for (i = 0; i < t->readers; i++) {
 		pthread_attr_t attr;
+
+		memset(&attr, 0, sizeof(attr));
 		CPU_ZERO(&cpus);
 		CPU_SET(i%nr, &cpus);
-		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
-						  &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -148,10 +149,11 @@ static void test(const struct test *restrict t)
 	}
 	for (i = 0; i < t->writers; i++) {
 		pthread_attr_t attr;
+
+		memset(&attr, 0, sizeof(attr));
 		CPU_ZERO(&cpus);
 		CPU_SET(i%nr, &cpus);
-		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
-						  &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -195,8 +197,7 @@ static void test(const struct test *restrict t)
 	if (fclose(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
-	fprintf(stdout, "%34s: %2ld locker(s)\n", t->name, got);
-	fflush(stdout);
+	printf("%34s: %2ld locker(s)\n", t->name, got);
 	for (i = 0; i < t->readers; i++) {
 		void *retp = NULL;
 		if (!readers[i])

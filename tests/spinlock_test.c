@@ -106,10 +106,11 @@ static void test(const struct test *restrict t)
 	memset(testers, 0, sizeof(testers));
 	for (i = 0; i < t->nr; i++) {
 		pthread_attr_t attr;
+
+		memset(&attr, 0, sizeof(attr));
 		CPU_ZERO(&cpus);
 		CPU_SET(i%nr, &cpus);
-		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
-						  &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
 		if (err) {
 			errno = err;
 			goto perr;
@@ -179,8 +180,7 @@ static void test(const struct test *restrict t)
 	if (fclose(fp) == -1)
 		goto perr;
 	got = strtol(buf, NULL, 10);
-	fprintf(stdout, "%27s: %3ld context(s) on free list\n",
-		t->name, got);
+	printf("%27s: %3ld context(s) on free list\n", t->name, got);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);

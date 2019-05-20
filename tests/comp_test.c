@@ -91,10 +91,11 @@ static void test(const struct test *restrict t)
 	memset(waiters, 0, sizeof(waiters));
 	for (i = 0; i < t->waiters; i++) {
 		pthread_attr_t attr;
+
+		memset(&attr, 0, sizeof(attr));
 		CPU_ZERO(&cpus);
 		CPU_SET(i%nr, &cpus);
-		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus),
-						  &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
 		if (err) {
 			errno = err;
 			goto perr;
