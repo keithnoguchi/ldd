@@ -53,6 +53,11 @@
 - [rculock.c](rculock.c): <linux/rcupdate.h> test module
   - [rculock_test.c](tests/rculock_test.c): rculock.c unit test
 
+### Advanced Character Device Drivers
+
+- [sleepy.c](sleepy.c): <linux/wait.h> wait queue test module
+  - [sleepy_test.c](tests/sleepy_test.c): sleepy.c unit test
+
 ## Build
 
 ```sh
