@@ -30,25 +30,58 @@ struct context {
 static void *reader(void *arg)
 {
 	struct context *ctx = arg;
+	const struct test *const t = ctx->t;
+	char buf[BUFSIZ], path[PATH_MAX];
+	int err, fd;
 
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
 
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_RDONLY);
+	if (fd == -1)
+		goto perr;
+	err = read(fd, buf, sizeof(buf));
+	if (err == -1)
+		goto perr;
+	if (close(fd) == -1)
+		goto perr;
 	return (void *)EXIT_SUCCESS;
+perr:
+	perror(t->name);
+	return (void *)EXIT_FAILURE;
 }
 
 static void *writer(void *arg)
 {
 	struct context *ctx = arg;
+	char buf[BUFSIZ], path[PATH_MAX];
+	int err, fd;
 
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
 
+	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (err < 0)
+		goto perr;
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		goto perr;
+	err = write(fd, buf, sizeof(buf));
+	if (err == -1)
+		goto perr;
+	if (close(fd) == -1)
+		goto perr;
 	return (void *)EXIT_SUCCESS;
+perr:
+	perror(t->name);
+	return (void *)EXIT_FAILURE;
 }
 
 static void test(const struct test *restrict t)
