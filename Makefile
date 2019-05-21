@@ -19,6 +19,7 @@ MODS  += kfifo
 MODS  += seqlock
 MODS  += rculock
 MODS  += sleepy
+MODS  += scullpipe
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld

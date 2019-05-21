@@ -204,8 +204,8 @@ static int __init init(void)
 			goto err;
 		}
 		memset(dev, 0, sizeof(struct append_device));
-		cdev_init(&dev->cdev, &drv->fops);
 		device_initialize(&dev->base);
+		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
 		dev->data		= NULL;
 		dev->alloc = dev->size	= 0;
