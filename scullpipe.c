@@ -21,6 +21,7 @@ struct scullpipe_device {
 static struct scullpipe_driver {
 	dev_t			devt;
 	struct file_operations	fops;
+	struct device_type	type;
 	struct device_driver	base;
 	struct scullpipe_device	devs[2];
 } scullpipe_driver = {
@@ -83,6 +84,45 @@ static int release(struct inode *ip, struct file *fp)
 	return 0;
 }
 
+static ssize_t readers_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	unsigned int readers;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	readers = dev->readers;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%u\n", readers);
+}
+static DEVICE_ATTR_RO(readers);
+
+static ssize_t writers_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	unsigned int writers;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	writers = dev->writers;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%u\n", writers);
+}
+static DEVICE_ATTR_RO(writers);
+
+static struct attribute *scullpipe_attrs[] = {
+	&dev_attr_readers.attr,
+	&dev_attr_writers.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(scullpipe);
+
 static int __init init_driver(struct scullpipe_driver *drv)
 {
 	int err;
@@ -92,6 +132,8 @@ static int __init init_driver(struct scullpipe_driver *drv)
 				  drv->base.name);
 	if (err)
 		return err;
+	memset(&drv->type, 0, sizeof(struct device_type));
+	drv->type.groups	= scullpipe_groups;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
 	drv->fops.read		= read;
@@ -125,6 +167,7 @@ static int __init init(void)
 		dev->readers		= 0;
 		dev->writers		= 0;
 		dev->cdev.owner		= drv->base.owner;
+		dev->base.type		= &drv->type;
 		dev->base.init_name	= name;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
