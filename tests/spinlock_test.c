@@ -31,15 +31,15 @@ static void *tester(void *arg)
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
 	char path[PATH_MAX];
-	int err, fd;
+	int ret, err, fd;
 
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
 
-	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
 		goto perr;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
@@ -73,19 +73,19 @@ static void test(const struct test *restrict t)
 	pthread_t testers[t->nr];
 	char buf[BUFSIZ], path[PATH_MAX];
 	cpu_set_t cpus;
-	int i, err;
+	int i, ret, err;
 	FILE *fp;
 	long got;
 
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
@@ -95,12 +95,12 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
-	err = setrlimit(RLIMIT_NOFILE, &limit);
-	if (err == -1)
+	ret = setrlimit(RLIMIT_NOFILE, &limit);
+	if (ret == -1)
 		goto perr;
 	CPU_ZERO(&cpus);
-	err = sched_getaffinity(0, sizeof(cpus), &cpus);
-	if (err == -1)
+	ret = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (ret == -1)
 		goto perr;
 	nr = CPU_COUNT(&cpus);
 	memset(testers, 0, sizeof(testers));
@@ -149,15 +149,15 @@ static void test(const struct test *restrict t)
 		if (retp != (void *)EXIT_SUCCESS)
 			goto err;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/active",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
@@ -167,15 +167,15 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/free",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/free",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;

@@ -32,7 +32,7 @@ static void *tester(struct context *ctx, int flags)
 {
 	const struct test *const t = ctx->t;
 	char path[PATH_MAX];
-	int err, fd;
+	int ret, err, fd;
 
 	/* wait for the start */
 	pthread_mutex_lock(&ctx->lock);
@@ -40,8 +40,8 @@ static void *tester(struct context *ctx, int flags)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
 
-	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
 		goto perr;
 	fd = open(path, flags);
 	if (fd == -1)
@@ -85,19 +85,19 @@ static void test(const struct test *restrict t)
 	pthread_t readers[t->readers], writers[t->writers];
 	char buf[BUFSIZ], path[PATH_MAX];
 	cpu_set_t cpus;
-	int i, err;
+	int i, ret, err;
 	FILE *fp;
 	long got;
 
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	if (fclose(fp))
 		goto perr;
@@ -107,11 +107,13 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
-	err = setrlimit(RLIMIT_NOFILE, &limit);
-	if (err == -1)
+	ret = setrlimit(RLIMIT_NOFILE, &limit);
+	if (ret == -1)
 		goto perr;
 	CPU_ZERO(&cpus);
-	err = sched_getaffinity(0, sizeof(cpus), &cpus);
+	ret = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (ret == -1)
+		goto perr;
 	nr = CPU_COUNT(&cpus);
 	memset(readers, 0, sizeof(readers));
 	memset(writers, 0, sizeof(writers));
@@ -170,27 +172,27 @@ static void test(const struct test *restrict t)
 		errno = err;
 		goto perr;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/readers",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
 	printf("%36s: %3ld/", t->name, got);
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/writers",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
 	printf("%ld reader(s)/writer(s)\n", got);
@@ -218,15 +220,15 @@ static void test(const struct test *restrict t)
 		if (retp != (void *)EXIT_SUCCESS)
 			goto err;
 	}
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/lockers",
 		       t->dev);
-	if (err < 0)
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
-	fread(buf, sizeof(buf), 1, fp);
-	if (ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	got = strtol(buf, NULL, 10);
 	if (got != 0) {

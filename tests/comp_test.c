@@ -31,21 +31,21 @@ static void *tester(void *arg)
 	struct context *ctx = arg;
 	const struct test *t = ctx->t;
 	char path[PATH_MAX];
-	int err, fd;
+	int ret, fd;
 
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
 
-	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
 		goto perr;
 	fd = open(path, O_RDONLY);
 	if (fd == -1)
 		goto perr;
-	err = read(fd, NULL, 0);
-	if (err < 0)
+	ret = read(fd, NULL, 0);
+	if (ret < 0)
 		goto perr;
 	return (void *)EXIT_SUCCESS;
 perr:
@@ -69,23 +69,23 @@ static void test(const struct test *restrict t)
 	pthread_t waiters[t->waiters];
 	char buf[BUFSIZ], path[PATH_MAX];
 	cpu_set_t cpus;
-	int i, err, fd;
+	int i, ret, err, fd;
 	void *retp;
 	FILE *fp;
 	long got;
 
-	err = snprintf(path, sizeof(path), "/dev/%s", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
 		goto perr;
 	fd = open(path, O_WRONLY);
 	if (fd == -1)
 		goto perr;
-	err = setrlimit(RLIMIT_NOFILE, &limit);
-	if (err == -1)
+	ret = setrlimit(RLIMIT_NOFILE, &limit);
+	if (ret == -1)
 		goto perr;
 	CPU_ZERO(&cpus);
-	err = sched_getaffinity(0, sizeof(cpus), &cpus);
-	if (err == -1)
+	ret = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (ret == -1)
 		goto perr;
 	nr = CPU_COUNT(&cpus);
 	memset(waiters, 0, sizeof(waiters));
@@ -123,8 +123,8 @@ static void test(const struct test *restrict t)
 		goto perr;
 	}
 	/* wait for all the waiters */
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
+	if (ret < 0)
 		goto perr;
 	do {
 		pthread_yield();
@@ -133,8 +133,8 @@ static void test(const struct test *restrict t)
 			fprintf(stderr, "%s: %s: %s\n", t->name, path, strerror(errno));
 			goto err;
 		}
-		err = fread(buf, sizeof(buf), 1, fp);
-		if (err == 0 && ferror(fp))
+		ret = fread(buf, sizeof(buf), 1, fp);
+		if (ret == 0 && ferror(fp))
 			goto perr;
 		if (fclose(fp) == -1)
 			goto perr;
@@ -143,8 +143,8 @@ static void test(const struct test *restrict t)
 
 	/* notify the completion to all the waiters */
 	for (i = 0; i < t->waiters; i++) {
-		err = write(fd, NULL, 0);
-		if (err == -1)
+		ret = write(fd, NULL, 0);
+		if (ret == -1)
 			goto perr;
 	}
 	for (i = 0; i < t->waiters; i++) {
@@ -162,16 +162,16 @@ static void test(const struct test *restrict t)
 		}
 	}
 	/* make sure all the waiters are gone */
-	err = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
-	if (err < 0)
+	ret = snprintf(path, sizeof(path), "/sys/class/misc/%s/waiters", t->dev);
+	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
 	if (!fp) {
 		fprintf(stderr, "%s: %s: %s\n", t->name, path, strerror(errno));
 		goto err;
 	}
-	err = fread(buf, sizeof(buf), 1, fp);
-	if (err == 0 && ferror(fp))
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
