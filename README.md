@@ -28,7 +28,7 @@
 - [proc.c](proc.c): <linux/proc_fs.h> test module
   - [proc_test.c](tests/proc_test.c): proc.c unit test
 - [seq.c](seq.c): <linux/seq_file.h> test module
-  - [seq_test.c](tests/seq_file.c): seq.c unit test
+  - [seq_test.c](tests/seq_test.c): seq.c unit test
 - [faulty.c](faulty.c): dump_stack() test module
   - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
 
