@@ -3,31 +3,48 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/limits.h>
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
 #include <linux/mutex.h>
+#include <linux/slab.h>
+#include <linux/wait.h>
 
 struct scullpipe_device {
-	struct mutex	lock;
-	unsigned int	readers;
-	unsigned int	writers;
-	struct cdev	cdev;
-	struct device	base;
+	wait_queue_head_t	waitq;
+	struct mutex		lock;
+	char			*buf;
+	char			*end;
+	unsigned int		rp;
+	unsigned int		wp;
+	size_t			bufsiz;
+	size_t			alloc;
+	unsigned int		readers;
+	unsigned int		writers;
+	struct cdev		cdev;
+	struct device		base;
 };
 
 static struct scullpipe_driver {
+	size_t			default_bufsiz;
 	dev_t			devt;
 	struct file_operations	fops;
 	struct device_type	type;
 	struct device_driver	base;
 	struct scullpipe_device	devs[2];
 } scullpipe_driver = {
+	.default_bufsiz	= PAGE_SIZE,
 	.base.name	= "scullpipe",
 	.base.owner	= THIS_MODULE,
 };
+
+static int is_empty(const struct scullpipe_device *const dev)
+{
+	return dev->rp == dev->wp;
+}
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
@@ -116,9 +133,63 @@ static ssize_t writers_show(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(writers);
 
+static ssize_t bufsiz_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	size_t bufsiz;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	bufsiz = dev->bufsiz;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", bufsiz);
+}
+
+static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
+			    const char *page, size_t count)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	long bufsiz;
+	ssize_t err;
+
+	err = kstrtol(page, 10, &bufsiz);
+	if (err)
+		return err;
+	if (bufsiz < 0 || bufsiz > SIZE_MAX)
+		return -EINVAL;
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	err = -EINVAL;
+	if (!is_empty(dev))
+		goto out;
+	if (dev->alloc < bufsiz) {
+		/* PAGE_SIZE aligned buffer size */
+		size_t alloc = ((bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
+		void *buf = krealloc(dev->buf, alloc, GFP_KERNEL);
+		if (IS_ERR(buf)) {
+			err = PTR_ERR(buf);
+			goto out;
+		}
+		dev->alloc = alloc;
+		dev->buf = buf;
+	}
+	dev->bufsiz = bufsiz;
+	err = count;
+out:
+	mutex_unlock(&dev->lock);
+	return count;
+}
+static DEVICE_ATTR_RW(bufsiz);
+
 static struct attribute *scullpipe_attrs[] = {
 	&dev_attr_readers.attr,
 	&dev_attr_writers.attr,
+	&dev_attr_bufsiz.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(scullpipe);
@@ -164,15 +235,26 @@ static int __init init(void)
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
+		init_waitqueue_head(&dev->waitq);
 		dev->readers		= 0;
 		dev->writers		= 0;
+		dev->bufsiz		= drv->default_bufsiz;
+		dev->alloc		= ((dev->bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
+		dev->rp = dev->wp	= 0;
 		dev->cdev.owner		= drv->base.owner;
 		dev->base.type		= &drv->type;
 		dev->base.init_name	= name;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
+		dev->buf = kzalloc(dev->alloc, GFP_KERNEL);
+		if (IS_ERR(dev->buf)) {
+			err = PTR_ERR(dev->buf);
+			end = dev;
+			goto err;
+		}
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
+			kfree(dev->buf);
 			end = dev;
 			goto err;
 		}
@@ -192,8 +274,10 @@ static void __exit term(void)
 	struct scullpipe_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct scullpipe_device *dev;
 
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
 		cdev_device_del(&dev->cdev, &dev->base);
+		kfree(dev->buf);
+	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
