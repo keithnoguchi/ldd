@@ -18,6 +18,8 @@ struct test {
 	const char	*const dev;
 	unsigned int	readers;
 	unsigned int	writers;
+	size_t		bufsiz;
+	size_t		alloc;
 };
 
 struct context {
@@ -94,6 +96,53 @@ static void test(const struct test *restrict t)
 	FILE *fp;
 	long got;
 
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->bufsiz);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, sizeof(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp)) {
+		fprintf(stderr, "%s: here\n", t->name);
+		goto perr;
+	}
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->bufsiz) {
+		fprintf(stderr, "%s: unexpected initial bufsiz:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->bufsiz, got);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->alloc) {
+		fprintf(stderr, "%s: unexpected initial buffer alloc size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->alloc, got);
+		goto err;
+	}
 	ret = snprintf(path, sizeof(path), "/sys/devices/%s/readers", t->dev);
 	if (ret < 0)
 		goto perr;
@@ -250,6 +299,23 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->bufsiz) {
+		fprintf(stderr, "%s: unexpected final bufsiz:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->bufsiz, got);
+		goto err;
+	}
+	if (fclose(fp) == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -265,108 +331,432 @@ int main(void)
 			.dev		= "scullpipe0",
 			.readers	= 0,
 			.writers	= 1,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "1 reader and 1 writer on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 1,
 			.writers	= 1,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "32 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 0,
 			.writers	= 32,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "8 readers and 32 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 8,
 			.writers	= 32,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "16 readers and 32 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 16,
 			.writers	= 32,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "32 readers and 32 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 32,
 			.writers	= 32,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "64 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 0,
 			.writers	= 64,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "32 readers and 64 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 32,
 			.writers	= 64,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "64 readers and 64 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 64,
 			.writers	= 64,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "256 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 0,
 			.writers	= 256,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "128 readers and 256 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 128,
 			.writers	= 256,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "256 readers and 256 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 256,
 			.writers	= 256,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "1024 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 0,
 			.writers	= 1024,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "512 readers and 1024 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 512,
 			.writers	= 1024,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "1024 readers and 1024 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 1024,
 			.writers	= 1024,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "2048 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 0,
 			.writers	= 2048,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "1024 readers and 2048 writers on scullpipe0",
 			.dev		= "scullpipe0",
 			.readers	= 1024,
 			.writers	= 2048,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 		},
 		{
 			.name		= "2048 readers and 2048 writers on scullpipe1",
 			.dev		= "scullpipe1",
 			.readers	= 2048,
 			.writers	= 2048,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1 writer on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 1,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1 reader and 1 writer on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 1,
+			.writers	= 1,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "32 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 32,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "8 readers and 32 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 8,
+			.writers	= 32,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "16 readers and 32 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 16,
+			.writers	= 32,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "32 readers and 32 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 32,
+			.writers	= 32,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "64 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 64,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "32 readers and 64 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 32,
+			.writers	= 64,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "64 readers and 64 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 64,
+			.writers	= 64,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "256 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 0,
+			.writers	= 256,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "128 readers and 256 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 128,
+			.writers	= 256,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "256 readers and 256 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 256,
+			.writers	= 256,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1024 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 1024,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "512 readers and 1024 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 512,
+			.writers	= 1024,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1024 readers and 1024 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 1024,
+			.writers	= 1024,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "2048 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 0,
+			.writers	= 2048,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1024 readers and 2048 writers on scullpipe0 with 1KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 1024,
+			.writers	= 2048,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "2048 readers and 2048 writers on scullpipe1 with 1KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 2048,
+			.writers	= 2048,
+			.bufsiz		= 1024,
+			.alloc		= 4096,
+		},
+		{
+			.name		= "1 writer on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 1,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "1 reader and 1 writer on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 1,
+			.writers	= 1,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "32 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 32,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "8 readers and 32 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 8,
+			.writers	= 32,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "16 readers and 32 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 16,
+			.writers	= 32,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "32 readers and 32 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 32,
+			.writers	= 32,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "64 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 64,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "32 readers and 64 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 32,
+			.writers	= 64,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "64 readers and 64 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 64,
+			.writers	= 64,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "256 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 0,
+			.writers	= 256,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "128 readers and 256 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 128,
+			.writers	= 256,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "256 readers and 256 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 256,
+			.writers	= 256,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "1024 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 0,
+			.writers	= 1024,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "512 readers and 1024 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 512,
+			.writers	= 1024,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "1024 readers and 1024 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 1024,
+			.writers	= 1024,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "2048 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 0,
+			.writers	= 2048,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "1024 readers and 2048 writers on scullpipe0 with 8KB buffer",
+			.dev		= "scullpipe0",
+			.readers	= 1024,
+			.writers	= 2048,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
+		},
+		{
+			.name		= "2048 readers and 2048 writers on scullpipe1 with 8KB buffer",
+			.dev		= "scullpipe1",
+			.readers	= 2048,
+			.writers	= 2048,
+			.bufsiz		= 8192,
+			.alloc		= 8192,
 		},
 		{.name = NULL},
 	};

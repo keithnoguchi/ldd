@@ -186,10 +186,27 @@ out:
 }
 static DEVICE_ATTR_RW(bufsiz);
 
+static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
+			  char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	size_t alloc;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	alloc = dev->alloc;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", alloc);
+}
+static DEVICE_ATTR_RO(alloc);
+
 static struct attribute *scullpipe_attrs[] = {
 	&dev_attr_readers.attr,
 	&dev_attr_writers.attr,
 	&dev_attr_bufsiz.attr,
+	&dev_attr_alloc.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(scullpipe);
