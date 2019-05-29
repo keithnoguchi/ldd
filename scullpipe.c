@@ -11,15 +11,17 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/sched.h>
+#include <linux/uaccess.h>
 #include <linux/wait.h>
 
 struct scullpipe_device {
-	wait_queue_head_t	waitq;
+	wait_queue_head_t	inq;
+	wait_queue_head_t	outq;
 	struct mutex		lock;
-	char			*buf;
-	char			*end;
-	unsigned int		rp;
-	unsigned int		wp;
+	void			*buf;
+	size_t			rpos;
+	size_t			wpos;
 	size_t			bufsiz;
 	size_t			alloc;
 	unsigned int		readers;
@@ -43,22 +45,118 @@ static struct scullpipe_driver {
 
 static int is_empty(const struct scullpipe_device *const dev)
 {
-	return dev->rp == dev->wp;
+	return dev->rpos == dev->wpos;
 }
 
 static int is_full(const struct scullpipe_device *const dev)
 {
-	return (dev->rp+dev->wp)%dev->bufsiz+1 == dev->bufsiz;
+	return (dev->rpos+dev->wpos)%dev->bufsiz+1 == dev->bufsiz;
+}
+
+static ssize_t data(const struct scullpipe_device *const dev)
+{
+	if (is_empty(dev))
+		return 0;
+	else if (dev->rpos < dev->wpos)
+		return dev->wpos-dev->rpos;
+	else /* wrapped */
+		return dev->bufsiz-(dev->rpos-dev->wpos);
+}
+
+static ssize_t space(const struct scullpipe_device *const dev)
+{
+	if (is_full(dev))
+		return 0;
+	else if (dev->wpos < dev->rpos)
+		return dev->rpos-dev->wpos-1;
+	else /* wrapped */
+		return dev->bufsiz-(dev->wpos-dev->rpos)-1;
+}
+
+static void *readp(const struct scullpipe_device *const dev)
+{
+	return dev->buf+dev->rpos;
+}
+
+static void *writep(const struct scullpipe_device *const dev)
+{
+	return dev->buf+dev->wpos;
 }
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
-	return 0;
+	struct scullpipe_device *dev = fp->private_data;
+	unsigned long remain;
+	int ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	while (is_empty(dev)) {
+		ret = -EAGAIN;
+		if (fp->f_flags&O_NONBLOCK)
+			goto out;
+		printk(KERN_DEBUG "[%s:%d] read block\n", dev_name(&dev->base),
+		       task_pid_nr(current));
+		mutex_unlock(&dev->lock);
+		if (wait_event_interruptible(dev->inq, data(dev)))
+			return -ERESTARTSYS;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
+	}
+	ret = data(dev);
+	if (ret > count)
+		ret = count;
+	remain = ret;
+	do {
+		unsigned int len = copy_to_user(buf, readp(dev), remain);
+		dev->rpos += remain-len;
+		buf += remain-len;
+		if (dev->rpos >= dev->bufsiz)
+			dev->rpos -= dev->bufsiz;
+		remain = len;
+	} while (remain);
+	wake_up_interruptible(&dev->outq);
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
-	return count;
+	struct scullpipe_device *dev = fp->private_data;
+	unsigned int remain;
+	int ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	while (is_full(dev)) {
+		ret = -EAGAIN;
+		if (fp->f_flags&O_NONBLOCK)
+			goto out;
+		printk(KERN_DEBUG "[%s:%d] write block\n", dev_name(&dev->base),
+		       task_pid_nr(current));
+		mutex_unlock(&dev->lock);
+		if (wait_event_interruptible(dev->outq, space(dev)))
+			return -ERESTARTSYS;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
+	}
+	ret = space(dev);
+	if (ret > count)
+		ret = count;
+	remain = ret;
+	do {
+		unsigned int len = copy_from_user(writep(dev), buf, remain);
+		dev->wpos += remain-len;
+		buf += remain-len;
+		if (dev->wpos >= dev->bufsiz)
+			dev->wpos -= dev->bufsiz;
+		remain = len;
+	} while (remain);
+	wake_up_interruptible(&dev->inq);
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static int open(struct inode *ip, struct file *fp)
@@ -159,17 +257,17 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	ssize_t err;
+	ssize_t ret;
 	long val;
 
-	err = kstrtol(page, 10, &val);
-	if (err)
-		return err;
+	ret = kstrtol(page, 10, &val);
+	if (ret)
+		return ret;
 	if (val < 0 || val > SIZE_MAX)
 		return -EINVAL;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	err = -EINVAL;
+	ret = -EINVAL;
 	if (!is_empty(dev))
 		goto out;
 	if (dev->alloc < val) {
@@ -177,17 +275,18 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 		size_t alloc = ((val-1)/PAGE_SIZE+1)*PAGE_SIZE;
 		void *buf = krealloc(dev->buf, alloc, GFP_KERNEL);
 		if (IS_ERR(buf)) {
-			err = PTR_ERR(buf);
+			ret = PTR_ERR(buf);
 			goto out;
 		}
 		dev->alloc = alloc;
 		dev->buf = buf;
 	}
 	dev->bufsiz = val;
-	err = count;
+	dev->rpos = dev->wpos = 0;
+	ret = count;
 out:
 	mutex_unlock(&dev->lock);
-	return count;
+	return ret;
 }
 static DEVICE_ATTR_RW(bufsiz);
 
@@ -291,12 +390,13 @@ static int __init init(void)
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
-		init_waitqueue_head(&dev->waitq);
+		init_waitqueue_head(&dev->inq);
+		init_waitqueue_head(&dev->outq);
 		dev->readers		= 0;
 		dev->writers		= 0;
+		dev->rpos = dev->wpos	= 0;
 		dev->bufsiz		= drv->default_bufsiz;
 		dev->alloc		= ((dev->bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
-		dev->rp = dev->wp	= 0;
 		dev->cdev.owner		= drv->base.owner;
 		dev->base.type		= &drv->type;
 		dev->base.init_name	= name;
