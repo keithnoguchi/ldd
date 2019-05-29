@@ -12,6 +12,7 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 
@@ -92,13 +93,17 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	while (is_empty(dev)) {
-		ret = -EAGAIN;
+		DEFINE_WAIT(w);
+		mutex_unlock(&dev->lock);
 		if (fp->f_flags&O_NONBLOCK)
-			goto out;
+			return -EAGAIN;
 		printk(KERN_DEBUG "[%s:%d] read block\n", dev_name(&dev->base),
 		       task_pid_nr(current));
-		mutex_unlock(&dev->lock);
-		if (wait_event_interruptible(dev->inq, data(dev)))
+		prepare_to_wait(&dev->inq, &w, TASK_INTERRUPTIBLE);
+		if (is_empty(dev))
+			schedule();
+		finish_wait(&dev->inq, &w);
+		if (signal_pending(current))
 			return -ERESTARTSYS;
 		if (mutex_lock_interruptible(&dev->lock))
 			return -ERESTARTSYS;
@@ -115,9 +120,8 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 			dev->rpos -= dev->bufsiz;
 		remain = len;
 	} while (remain);
-	wake_up_interruptible(&dev->outq);
-out:
 	mutex_unlock(&dev->lock);
+	wake_up_interruptible(&dev->outq);
 	return ret;
 }
 
@@ -130,13 +134,17 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	while (is_full(dev)) {
-		ret = -EAGAIN;
+		DEFINE_WAIT(w);
+		mutex_unlock(&dev->lock);
 		if (fp->f_flags&O_NONBLOCK)
-			goto out;
+			return -EAGAIN;
 		printk(KERN_DEBUG "[%s:%d] write block\n", dev_name(&dev->base),
 		       task_pid_nr(current));
-		mutex_unlock(&dev->lock);
-		if (wait_event_interruptible(dev->outq, space(dev)))
+		prepare_to_wait(&dev->outq, &w, TASK_INTERRUPTIBLE);
+		if (is_full(dev))
+			schedule();
+		finish_wait(&dev->outq, &w);
+		if (signal_pending(current))
 			return -ERESTARTSYS;
 		if (mutex_lock_interruptible(&dev->lock))
 			return -ERESTARTSYS;
@@ -153,9 +161,8 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 			dev->wpos -= dev->bufsiz;
 		remain = len;
 	} while (remain);
-	wake_up_interruptible(&dev->inq);
-out:
 	mutex_unlock(&dev->lock);
+	wake_up_interruptible(&dev->inq);
 	return ret;
 }
 
