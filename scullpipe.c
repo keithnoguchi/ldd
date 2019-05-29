@@ -46,6 +46,11 @@ static int is_empty(const struct scullpipe_device *const dev)
 	return dev->rp == dev->wp;
 }
 
+static int is_full(const struct scullpipe_device *const dev)
+{
+	return (dev->rp+dev->wp)%dev->bufsiz+1 == dev->bufsiz;
+}
+
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	return 0;
@@ -107,13 +112,13 @@ static ssize_t readers_show(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	unsigned int readers;
+	unsigned int val;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	readers = dev->readers;
+	val = dev->readers;
 	mutex_unlock(&dev->lock);
-	return snprintf(page, PAGE_SIZE, "%u\n", readers);
+	return snprintf(page, PAGE_SIZE, "%u\n", val);
 }
 static DEVICE_ATTR_RO(readers);
 
@@ -123,13 +128,13 @@ static ssize_t writers_show(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	unsigned int writers;
+	unsigned int val;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	writers = dev->writers;
+	val = dev->writers;
 	mutex_unlock(&dev->lock);
-	return snprintf(page, PAGE_SIZE, "%u\n", writers);
+	return snprintf(page, PAGE_SIZE, "%u\n", val);
 }
 static DEVICE_ATTR_RO(writers);
 
@@ -139,13 +144,13 @@ static ssize_t bufsiz_show(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	size_t bufsiz;
+	size_t val;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	bufsiz = dev->bufsiz;
+	val = dev->bufsiz;
 	mutex_unlock(&dev->lock);
-	return snprintf(page, PAGE_SIZE, "%ld\n", bufsiz);
+	return snprintf(page, PAGE_SIZE, "%ld\n", val);
 }
 
 static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
@@ -154,22 +159,22 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	long bufsiz;
 	ssize_t err;
+	long val;
 
-	err = kstrtol(page, 10, &bufsiz);
+	err = kstrtol(page, 10, &val);
 	if (err)
 		return err;
-	if (bufsiz < 0 || bufsiz > SIZE_MAX)
+	if (val < 0 || val > SIZE_MAX)
 		return -EINVAL;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	err = -EINVAL;
 	if (!is_empty(dev))
 		goto out;
-	if (dev->alloc < bufsiz) {
+	if (dev->alloc < val) {
 		/* PAGE_SIZE aligned buffer size */
-		size_t alloc = ((bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
+		size_t alloc = ((val-1)/PAGE_SIZE+1)*PAGE_SIZE;
 		void *buf = krealloc(dev->buf, alloc, GFP_KERNEL);
 		if (IS_ERR(buf)) {
 			err = PTR_ERR(buf);
@@ -178,7 +183,7 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 		dev->alloc = alloc;
 		dev->buf = buf;
 	}
-	dev->bufsiz = bufsiz;
+	dev->bufsiz = val;
 	err = count;
 out:
 	mutex_unlock(&dev->lock);
@@ -192,21 +197,55 @@ static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
 	struct scullpipe_device *dev = container_of(base,
 						    struct scullpipe_device,
 						    base);
-	size_t alloc;
+	size_t val;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	alloc = dev->alloc;
+	val = dev->alloc;
 	mutex_unlock(&dev->lock);
-	return snprintf(page, PAGE_SIZE, "%ld\n", alloc);
+	return snprintf(page, PAGE_SIZE, "%ld\n", val);
 }
 static DEVICE_ATTR_RO(alloc);
+
+static ssize_t is_empty_show(struct device *base, struct device_attribute *attr,
+			     char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	int val = 0;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	val = is_empty(dev);
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%d\n", val);
+}
+static DEVICE_ATTR_RO(is_empty);
+
+static ssize_t is_full_show(struct device *base, struct device_attribute *attr,
+			    char *page)
+{
+	struct scullpipe_device *dev = container_of(base,
+						    struct scullpipe_device,
+						    base);
+	int val = 0;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	val = is_full(dev);
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%d\n", val);
+}
+static DEVICE_ATTR_RO(is_full);
 
 static struct attribute *scullpipe_attrs[] = {
 	&dev_attr_readers.attr,
 	&dev_attr_writers.attr,
 	&dev_attr_bufsiz.attr,
 	&dev_attr_alloc.attr,
+	&dev_attr_is_empty.attr,
+	&dev_attr_is_full.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(scullpipe);

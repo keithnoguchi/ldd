@@ -177,6 +177,40 @@ static void test(const struct test *restrict t)
 			t->name, got);
 		goto err;
 	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/is_empty", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 1) {
+		fprintf(stderr, "%s: unexpected initial is_empty value:\n\t- want: 1\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/is_full", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: unexpected initial is_full value:\n\t- want: 1\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
 	ret = setrlimit(RLIMIT_NOFILE, &limit);
 	if (ret == -1)
 		goto perr;
@@ -308,14 +342,48 @@ static void test(const struct test *restrict t)
 	ret = fread(buf, sizeof(buf), 1, fp);
 	if (ret == 0 && ferror(fp))
 		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
 	got = strtol(buf, NULL, 10);
 	if (got != t->bufsiz) {
 		fprintf(stderr, "%s: unexpected final bufsiz:\n\t- want: %ld\n\t-  got: %ld\n",
 			t->name, t->bufsiz, got);
 		goto err;
 	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/is_empty", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 1) {
+		fprintf(stderr, "%s: unexpected final is_empty value:\n\t- want: 1\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/is_full", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != 0) {
+		fprintf(stderr, "%s: unexpected final is_full value:\n\t- want: 1\n\t-  got: %ld\n",
+			t->name, got);
+		goto err;
+	}
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
