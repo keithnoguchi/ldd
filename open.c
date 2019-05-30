@@ -20,10 +20,11 @@ static struct open_driver {
 	dev_t			devt;
 	struct file_operations	fops;
 	struct device_driver	base;
-	struct open_device	devs[1000]; /* 1000 devices!? */
+	struct open_device	devs[1]; /* single device */
 } open_driver = {
-	.base.name	= "open",
-	.base.owner	= THIS_MODULE,
+	.base.name		= "open",
+	.base.owner		= THIS_MODULE,
+	.devs[0].base.init_name	= "open0",
 };
 
 static int open(struct inode *ip, struct file *fp)
@@ -49,59 +50,43 @@ static ssize_t open_nr_show(struct device *dev, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(open_nr);
 
-static void __init init_driver(struct open_driver *drv)
+static int __init init_driver(struct open_driver *drv)
 {
+	int err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),
+				      drv->base.name);
+	if (err)
+		return err;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
+	return 0;
 }
 
 static int __init init(void)
 {
 	struct open_driver *drv = &open_driver;
-	struct open_device *end = drv->devs+ARRAY_SIZE(drv->devs);
-	struct open_device *dev;
-	char name[8]; /* for 1000 devices */
-	int i, err;
+	struct open_device *dev = drv->devs;
+	int err;
 
-	err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),
-				  drv->base.name);
+	err = init_driver(drv);
 	if (err)
 		return err;
-
-	init_driver(drv);
-	for (dev = drv->devs, i = 0; dev < end; dev++, i++) {
-		err = snprintf(name, sizeof(name), "%s%d", drv->base.name, i);
-		if (err <= 0) {
-			end = dev;
-			goto err;
-		}
-		memset(dev, 0, sizeof(struct open_device));
-		atomic_set(&dev->open_nr, 0);
-		cdev_init(&dev->cdev, &drv->fops);
-		device_initialize(&dev->base);
-		dev->cdev.owner		= drv->base.owner;
-		dev->base.init_name	= name;
-		dev->base.devt		= MKDEV(MAJOR(drv->devt),
-						MINOR(drv->devt)+i);
-		err = cdev_device_add(&dev->cdev, &dev->base);
-		if (err) {
-			end = dev;
-			goto err;
-		}
-		err = device_create_file(&dev->base, &dev_attr_open_nr);
-		if (err) {
-			end = dev+1;
-			goto err;
-		}
+	atomic_set(&dev->open_nr, 0);
+	cdev_init(&dev->cdev, &drv->fops);
+	device_initialize(&dev->base);
+	dev->cdev.owner	= drv->base.owner;
+	dev->base.devt	= drv->devt;
+	err = cdev_device_add(&dev->cdev, &dev->base);
+	if (err)
+		goto err;
+	err = device_create_file(&dev->base, &dev_attr_open_nr);
+	if (err) {
+		cdev_device_del(&dev->cdev, &dev->base);
+		goto err;
 	}
 	return 0;
 err:
-	for (dev = drv->devs; dev < end; dev++) {
-		device_remove_file(&dev->base, &dev_attr_open_nr);
-		cdev_device_del(&dev->cdev, &dev->base);
-	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
@@ -110,13 +95,9 @@ module_init(init);
 static void __exit term(void)
 {
 	struct open_driver *drv = &open_driver;
-	struct open_device *end = drv->devs+ARRAY_SIZE(drv->devs);
-	struct open_device *dev;
-
-	for (dev = drv->devs; dev < end; dev++) {
-		device_remove_file(&dev->base, &dev_attr_open_nr);
-		cdev_device_del(&dev->cdev, &dev->base);
-	}
+	struct open_device *dev = drv->devs;
+	device_remove_file(&dev->base, &dev_attr_open_nr);
+	cdev_device_del(&dev->cdev, &dev->base);
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
