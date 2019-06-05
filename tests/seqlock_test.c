@@ -297,9 +297,9 @@ int main(void)
 			.writers	= 512,
 		},
 		{
-			.name		= "4096 readers and 1024 writers on seqlock1",
+			.name		= "2048 readers and 1024 writers on seqlock1",
 			.dev		= "seqlock1",
-			.readers	= 4096,
+			.readers	= 2048,
 			.writers	= 1024,
 		},
 		{.name = NULL},
