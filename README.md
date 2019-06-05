@@ -59,6 +59,8 @@
   - [sleepy_test.c](tests/sleepy_test.c): sleepy.c unit test
 - [scullpipe.c](scullpipe.c): <linux/wait.h> low level wait queue test module
   - [scullpipe_test.c](tests/scullpipe_test.c): scullpipe.c self test
+- [scullfifo.c](scullfifo.c): FIFO version of the scullpipe.c
+  - [scullfifo_test.c](tests/scullfifo_test.c): scullfifo.c self test
 
 ## Build
 
