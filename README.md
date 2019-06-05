@@ -9,54 +9,54 @@
 ### Character Device Drivers
 
 - [open.c](open.c): open(2) and close(2) sample driver
-  - [open_test.c](tests/open_test.c): open.c unit test
+  - [open_test.c](tests/open_test.c): open.c self test
 - [read.c](read.c): read(2) sample driver
-  - [read_test.c](tests/read_test.c): read.c unit test
+  - [read_test.c](tests/read_test.c): read.c self test
 - [write.c](write.c): write(2) sample driver
-  - [write_test.c](tests/write_test.c): write.c unit test
+  - [write_test.c](tests/write_test.c): write.c self test
 - [readv.c](readv.c): readv(2) sample driver
-  - [readv_test.c](tests/readv_test.c): readv.c unit test
+  - [readv_test.c](tests/readv_test.c): readv.c self test
 - [writev.c](writev.c): writev(2) sample driver
-  - [writev_test.c](tests/writev_test.c): writev.c unit test
+  - [writev_test.c](tests/writev_test.c): writev.c self test
 - [append.c](append.c): open(O_APPEND) sample driver
-  - [append_test.c](tests/append_test.c): append.c unit test
+  - [append_test.c](tests/append_test.c): append.c self test
 - [scull.c](scull.c): Simple Character Utility for Loading Localities driver
-  - [scull_test.c](tests/scull_test.c): scull.c unit test
+  - [scull_test.c](tests/scull_test.c): scull.c self test
 
 ### Debugging Primitive Test Modules
 
 - [proc.c](proc.c): <linux/proc_fs.h> test module
-  - [proc_test.c](tests/proc_test.c): proc.c unit test
+  - [proc_test.c](tests/proc_test.c): proc.c self test
 - [seq.c](seq.c): <linux/seq_file.h> test module
-  - [seq_test.c](tests/seq_test.c): seq.c unit test
+  - [seq_test.c](tests/seq_test.c): seq.c self test
 - [faulty.c](faulty.c): dump_stack() test module
-  - [faulty_test.c](tests/faulty_test.c): faulty.c unit test
+  - [faulty_test.c](tests/faulty_test.c): faulty.c self test
 
 ### Concurrency Primitive Test Modules
 
 - [sem.c](sem.c): <linux/semaphore.h> test module
-  - [sem_test.c](tests/sem_test.c): sem.c unit test
+  - [sem_test.c](tests/sem_test.c): sem.c self test
 - [rwsem.c](rwsem.c): <linux/rwsem.h> test module
-  - [rwsem_test.c](tests/rwsem_test.c): rwsem.c unit test
+  - [rwsem_test.c](tests/rwsem_test.c): rwsem.c self test
 - [mutex.c](mutex.c): <linux/mutex.h> test module
-  - [mutex_test.c](tests/mutex_test.c): mutex.c unit test
+  - [mutex_test.c](tests/mutex_test.c): mutex.c self test
 - [comp.c](comp.c): <linux/completion.h> test module
-  - [comp_test.c](tests/comp_test.c): comp.c unit test
+  - [comp_test.c](tests/comp_test.c): comp.c self test
 - [spinlock.c](spinlock.c): spinlock_t test module
-  - [spinlock_test.c](tests/spinlock_test.c): spinlock.c unit test
+  - [spinlock_test.c](tests/spinlock_test.c): spinlock.c self test
 - [rwlock.c](rwlock.c): rwlock_t test module
-  - [rwlock_test.c](tests/rwlock_test.c): rwlock.c unit test
+  - [rwlock_test.c](tests/rwlock_test.c): rwlock.c self test
 - [kfifo.c](kfifo.c): <linux/kfifo.h> test module
-  - [kfifo_test.c](tests/kfifo_test.c): kfifo.c unit test
+  - [kfifo_test.c](tests/kfifo_test.c): kfifo.c self test
 - [seqlock.c](seqlock.c): <linux/seqlock.h> test module
-  - [seqlock_test.c](tests/eqlock_test.c): seqlock.c unit test
+  - [seqlock_test.c](tests/eqlock_test.c): seqlock.c self test
 - [rculock.c](rculock.c): <linux/rcupdate.h> test module
-  - [rculock_test.c](tests/rculock_test.c): rculock.c unit test
+  - [rculock_test.c](tests/rculock_test.c): rculock.c self test
 
 ### Advanced Character Device Drivers
 
 - [sleepy.c](sleepy.c): <linux/wait.h> wait queue test module
-  - [sleepy_test.c](tests/sleepy_test.c): sleepy.c unit test
+  - [sleepy_test.c](tests/sleepy_test.c): sleepy.c self test
 - [scullpipe.c](scullpipe.c): <linux/wait.h> low level wait queue test module
   - [scullpipe_test.c](tests/scullpipe_test.c): scullpipe.c self test
 - [scullfifo.c](scullfifo.c): FIFO version of the scullpipe.c
