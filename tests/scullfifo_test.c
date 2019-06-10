@@ -5,6 +5,7 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sched.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
@@ -81,6 +82,7 @@ static void test(const struct test *restrict t)
 	pthread_t readers[t->readers], writers[t->writers];
 	char path[PATH_MAX], buf[BUFSIZ];
 	int i, ret, err;
+	cpu_set_t cpus;
 	FILE *fp;
 	long val;
 
@@ -121,15 +123,36 @@ static void test(const struct test *restrict t)
 	ret = setrlimit(RLIMIT_NOFILE, &limit);
 	if (ret == -1)
 		goto perr;
+	CPU_ZERO(&cpus);
+	ret = sched_getaffinity(0, sizeof(cpus), &cpus);
+	if (ret == -1)
+		goto perr;
+	nr = CPU_COUNT(&cpus);
 	for (i = 0; i < t->readers; i++) {
-		err = pthread_create(&readers[i], NULL, reader, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&readers[i], &attr, reader, &ctx);
 		if (err) {
 			errno = err;
 			goto perr;
 		}
 	}
 	for (i = 0; i < t->writers; i++) {
-		err = pthread_create(&writers[i], NULL, writer, &ctx);
+		pthread_attr_t attr;
+		CPU_ZERO(&cpus);
+		CPU_SET(i%nr, &cpus);
+		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
+		if (err) {
+			errno = err;
+			goto perr;
+		}
+		err = pthread_create(&writers[i], &attr, writer, &ctx);
 		if (err) {
 			errno = err;
 			goto perr;
