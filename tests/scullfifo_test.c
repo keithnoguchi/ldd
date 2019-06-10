@@ -120,6 +120,37 @@ static void test(const struct test *restrict t)
 			t->name, val);
 		goto err;
 	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r+");
+	if (!fp)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->bufsiz);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, sizeof(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->alloc) {
+		fprintf(stderr, "%s: unexpected alloc value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->alloc, val);
+		goto err;
+	}
 	ret = setrlimit(RLIMIT_NOFILE, &limit);
 	if (ret == -1)
 		goto perr;
@@ -226,6 +257,23 @@ static void test(const struct test *restrict t)
 	if (val != 0) {
 		fprintf(stderr, "%s: unexpected final writers count:\n\t- want: 0\n\t-  got: %ld\n",
 			t->name, val);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->bufsiz) {
+		fprintf(stderr, "%s: unexpected final bufsiz value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->bufsiz, val);
 		goto err;
 	}
 	exit(EXIT_SUCCESS);
