@@ -45,7 +45,6 @@ EXPORT_SYMBOL(ldd_unregister_device);
 
 void ldd_release_device(struct device *dev)
 {
-	printk(KERN_INFO "release %s device\n", dev_name(dev));
 }
 EXPORT_SYMBOL(ldd_release_device);
 
