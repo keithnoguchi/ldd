@@ -52,7 +52,7 @@ static int is_full(const struct scullfifo_device *const dev)
 	return (dev->rpos+dev->wpos+1)%dev->bufsiz == 0;
 }
 
-static size_t datasiz(const struct scullfifo_device *const dev)
+static size_t datalen(const struct scullfifo_device *const dev)
 {
 	if (is_full(dev))
 		return dev->bufsiz-1;
@@ -64,7 +64,7 @@ static size_t datasiz(const struct scullfifo_device *const dev)
 		return dev->bufsiz-dev->rpos+dev->wpos;
 }
 
-static size_t bufsiz(const struct scullfifo_device *const dev)
+static size_t space(const struct scullfifo_device *const dev)
 {
 	if (is_empty(dev))
 		return dev->bufsiz-1;
@@ -74,6 +74,12 @@ static size_t bufsiz(const struct scullfifo_device *const dev)
 		return dev->rpos-dev->wpos-1;
 	else
 		return dev->bufsiz-dev->wpos+dev->rpos-1;
+}
+
+static size_t allocsiz(const struct scullfifo_device *const dev)
+{
+	/* dev->bufsiz should be greater than 0 */
+	return ((dev->bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
 }
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
@@ -90,7 +96,7 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 			goto out;
 		}
 	}
-	ret = datasiz(dev);
+	ret = datalen(dev);
 	if (ret > count)
 		ret = count;
 	/* no wrapped read */
@@ -122,7 +128,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 		ret = -EWOULDBLOCK;
 		goto out;
 	}
-	ret = bufsiz(dev);
+	ret = space(dev);
 	if (ret > count)
 		ret = count;
 	/* no wrapped write */
@@ -261,7 +267,7 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 	dev->rpos = 0;
 	dev->wpos = 0;
 	err = count;
-	alloc = ((val-1)/PAGE_SIZE+1)*PAGE_SIZE;
+	alloc = allocsiz(dev);
 	if (alloc <= dev->alloc)
 		goto out;
 	buf = krealloc(dev->buf, alloc, GFP_KERNEL);
@@ -344,7 +350,6 @@ static int __init init(void)
 		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
 		dev->bufsiz		= drv->default_bufsiz;
-		dev->alloc		= ((dev->bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
 		dev->rpos		= 0;
 		dev->wpos		= 0;
 		dev->readers		= 0;
@@ -354,6 +359,7 @@ static int __init init(void)
 		dev->base.type		= &drv->type;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
+		dev->alloc		= allocsiz(dev);
 		dev->buf = kmalloc(dev->alloc, GFP_KERNEL);
 		if (IS_ERR(dev->buf)) {
 			err = PTR_ERR(dev->buf);
