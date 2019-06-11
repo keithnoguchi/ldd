@@ -3,7 +3,6 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/string.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
 #include <linux/sysfs.h>
@@ -11,18 +10,21 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/wait.h>
 
 struct scullfifo_device {
-	struct mutex	lock;
-	void		*buf;
-	size_t		rpos;
-	size_t		wpos;
-	size_t		bufsiz;
-	size_t		alloc;
-	unsigned int	readers;
-	unsigned int	writers;
-	struct cdev	cdev;
-	struct device	base;
+	wait_queue_head_t	inq;
+	wait_queue_head_t	outq;
+	struct mutex		lock;
+	void			*buf;
+	size_t			rpos;
+	size_t			wpos;
+	size_t			bufsiz;
+	size_t			alloc;
+	unsigned int		readers;
+	unsigned int		writers;
+	struct cdev		cdev;
+	struct device		base;
 };
 
 static struct scullfifo_driver {
@@ -90,11 +92,19 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (is_empty(dev)) {
+	while (is_empty(dev)) {
 		if (dev->writers == 0) {
 			ret = 0;
 			goto out;
 		}
+		mutex_unlock(&dev->lock);
+		if (fp->f_flags&O_NONBLOCK)
+			return -EAGAIN;
+		ret = wait_event_interruptible(dev->inq, !is_empty(dev));
+		if (ret)
+			return ret;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
 	}
 	ret = datalen(dev);
 	if (ret > count)
@@ -111,6 +121,7 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 	}
 	dev->rpos = (dev->rpos+ret)%dev->bufsiz;
 	*pos += ret;
+	wake_up_interruptible(&dev->outq);
 out:
 	mutex_unlock(&dev->lock);
 	return ret;
@@ -124,9 +135,15 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (is_full(dev)) {
-		ret = -EWOULDBLOCK;
-		goto out;
+	while (is_full(dev)) {
+		mutex_unlock(&dev->lock);
+		if (fp->f_flags&O_NONBLOCK)
+			return -EAGAIN;
+		ret = wait_event_interruptible(dev->outq, !is_full(dev));
+		if (ret)
+			return ret;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
 	}
 	ret = space(dev);
 	if (ret > count)
@@ -143,7 +160,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	}
 	dev->wpos = (dev->wpos+ret)%dev->bufsiz;
 	*pos += ret;
-out:
+	wake_up_interruptible(&dev->inq);
 	mutex_unlock(&dev->lock);
 	return ret;
 }
@@ -299,7 +316,6 @@ static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(alloc);
 
-
 static struct attribute *scullfifo_attrs[] = {
 	&dev_attr_readers.attr,
 	&dev_attr_writers.attr,
@@ -334,7 +350,7 @@ static int __init init(void)
 	struct scullfifo_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct scullfifo_device *dev;
 	char name[11]; /* strlen(drv->base.name)+2 */
-	int err, i;
+	int i, err;
 
 	err = init_driver(drv);
 	if (err)
@@ -349,6 +365,8 @@ static int __init init(void)
 		device_initialize(&dev->base);
 		cdev_init(&dev->cdev, &drv->fops);
 		mutex_init(&dev->lock);
+		init_waitqueue_head(&dev->inq);
+		init_waitqueue_head(&dev->outq);
 		dev->bufsiz		= drv->default_bufsiz;
 		dev->rpos		= 0;
 		dev->wpos		= 0;
@@ -397,5 +415,5 @@ static void __exit term(void)
 module_exit(term);
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Kei Nohguhi <kei@nohguchi.com>");
+MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
 MODULE_DESCRIPTION("Scull fifo device driver");
