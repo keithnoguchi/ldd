@@ -22,18 +22,24 @@ struct poll_device {
 	size_t			wpos;
 	size_t			bufsiz;
 	size_t			alloc;
+	unsigned int		readers;
+	unsigned int		writers;
 	struct cdev		cdev;
 	struct device		base;
 };
 
 static struct poll_driver {
+	size_t			minimum_bufsiz;
 	size_t			default_bufsiz;
+	size_t			maximum_bufsiz;
 	dev_t			devt;
 	struct file_operations	fops;
 	struct device_driver	base;
 	struct poll_device	devs[3];
 } poll_driver = {
+	.minimum_bufsiz	= 1,
 	.default_bufsiz	= PAGE_SIZE,
+	.maximum_bufsiz	= PAGE_SIZE*4,
 	.base.name	= "poll",
 	.base.owner	= THIS_MODULE,
 };
@@ -177,9 +183,110 @@ static int open(struct inode *ip, struct file *fp)
 {
 	struct poll_device *dev = container_of(ip->i_cdev, struct poll_device,
 					       cdev);
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
 	fp->private_data = dev;
+	switch (fp->f_flags&O_ACCMODE) {
+	case O_RDWR:
+		dev->readers++;
+		/* fall through */
+	case O_WRONLY:
+		dev->writers++;
+		break;
+	default:
+		dev->readers++;
+		break;
+	}
+	mutex_unlock(&dev->lock);
 	return 0;
 }
+
+static int release(struct inode *ip, struct file *fp)
+{
+	struct poll_device *dev = fp->private_data;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	fp->private_data = dev;
+	switch (fp->f_flags&O_ACCMODE) {
+	case O_RDWR:
+		dev->readers--;
+		/* fall through */
+	case O_WRONLY:
+		dev->writers--;
+		break;
+	default:
+		dev->readers--;
+		break;
+	}
+	mutex_unlock(&dev->lock);
+	return 0;
+}
+
+static ssize_t bufsiz_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct poll_device *dev = container_of(base, struct poll_device, base);
+	size_t val;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	val = dev->bufsiz;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", val);
+}
+
+static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
+			    const char *page, size_t count)
+{
+	struct poll_device *dev = container_of(base, struct poll_device, base);
+	struct poll_driver *drv = dev_get_drvdata(base);
+	size_t obufsiz, alloc;
+	char *buf;
+	long val;
+	int ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	ret = kstrtol(page, 10, &val);
+	if (ret)
+		goto out;
+	if (val < drv->minimum_bufsiz || val > drv->maximum_bufsiz) {
+		ret = -EINVAL;
+		goto out;
+	}
+	if (dev->readers || dev->writers) {
+		ret = -EPERM;
+		goto out;
+	}
+	dev->rpos = dev->wpos = 0;
+	obufsiz = dev->bufsiz;
+	dev->bufsiz = val;
+	alloc = allocsiz(dev);
+	ret = count;
+	if (alloc < dev->alloc)
+		goto out;
+	buf = krealloc(dev->buf, alloc, GFP_KERNEL);
+	if (IS_ERR(buf)) {
+		dev->bufsiz = obufsiz;
+		ret = PTR_ERR(buf);
+		goto out;
+	}
+	dev->alloc = alloc;
+	dev->buf = buf;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
+}
+
+static DEVICE_ATTR_RW(bufsiz);
+
+static struct attribute *poll_attrs[] = {
+	&dev_attr_bufsiz.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(poll);
 
 static int __init init_driver(struct poll_driver *drv)
 {
@@ -190,11 +297,12 @@ static int __init init_driver(struct poll_driver *drv)
 	if (err)
 		return err;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
-	drv->fops.owner	= drv->base.owner;
-	drv->fops.read	= read;
-	drv->fops.write	= write;
-	drv->fops.poll	= poll;
-	drv->fops.open	= open;
+	drv->fops.owner		= drv->base.owner;
+	drv->fops.read		= read;
+	drv->fops.write		= write;
+	drv->fops.poll		= poll;
+	drv->fops.open		= open;
+	drv->fops.release	= release;
 	return 0;
 }
 
@@ -221,6 +329,8 @@ static int __init init(void)
 		mutex_init(&dev->lock);
 		init_waitqueue_head(&dev->inq);
 		init_waitqueue_head(&dev->outq);
+		dev->readers		= 0;
+		dev->writers		= 0;
 		dev->rpos = dev->wpos	= 0;
 		dev->bufsiz		= drv->default_bufsiz;
 		dev->alloc		= allocsiz(dev);
@@ -230,7 +340,9 @@ static int __init init(void)
 			end = dev;
 			goto err;
 		}
+		dev_set_drvdata(&dev->base, drv);
 		dev->base.init_name	= name;
+		dev->base.groups	= poll_groups;
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);

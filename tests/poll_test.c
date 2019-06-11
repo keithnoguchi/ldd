@@ -193,10 +193,36 @@ static void test(const struct test *restrict t)
 		.cond	= PTHREAD_COND_INITIALIZER,
 		.start	= 0,
 	};
+	char path[PATH_MAX], buf[BUFSIZ];
 	pthread_t pollers[t->pollers];
 	cpu_set_t cpus;
 	int i, ret, err;
+	FILE *fp;
+	long val;
 
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r+");
+	if (!fp)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->bufsiz);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, strlen(buf)+1, 1, fp);
+	if (ret == -1)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->bufsiz) {
+		fprintf(stderr, "%s: unexpected initial bufsiz:\n\t- want: %ld\n-  got: %ld\n",
+			t->name, t->bufsiz, val);
+		goto err;
+	}
 	ret = setrlimit(RLIMIT_NOFILE, &limit);
 	if (ret == -1)
 		goto perr;
@@ -248,6 +274,23 @@ static void test(const struct test *restrict t)
 		}
 		if (retp != (void *)EXIT_SUCCESS)
 			goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/bufsiz", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->bufsiz) {
+		fprintf(stderr, "%s: unexpected final bufsiz:\n\t- want: %ld\n-  got: %ld\n",
+			t->name, t->bufsiz, val);
+		goto err;
 	}
 	exit(EXIT_SUCCESS);
 perr:

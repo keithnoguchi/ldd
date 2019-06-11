@@ -333,8 +333,6 @@ static int __init init_driver(struct scullfifo_driver *drv)
 				  drv->base.name);
 	if (err)
 		return err;
-	memset(&drv->type, 0, sizeof(struct device_type));
-	drv->type.groups	= scullfifo_groups;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
 	drv->fops.read		= read;
@@ -372,11 +370,6 @@ static int __init init(void)
 		dev->wpos		= 0;
 		dev->readers		= 0;
 		dev->writers		= 0;
-		dev->base.init_name	= name;
-		dev->base.driver_data	= drv;
-		dev->base.type		= &drv->type;
-		dev->base.devt		= MKDEV(MAJOR(drv->devt),
-						MINOR(drv->devt)+i);
 		dev->alloc		= allocsiz(dev);
 		dev->buf = kmalloc(dev->alloc, GFP_KERNEL);
 		if (IS_ERR(dev->buf)) {
@@ -384,6 +377,11 @@ static int __init init(void)
 			end = dev;
 			goto err;
 		}
+		dev_set_drvdata(&dev->base, drv);
+		dev->base.init_name	= name;
+		dev->base.groups	= scullfifo_groups;
+		dev->base.devt		= MKDEV(MAJOR(drv->devt),
+						MINOR(drv->devt)+i);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			kfree(dev->buf);
