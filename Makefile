@@ -21,6 +21,7 @@ MODS  += rculock
 MODS  += sleepy
 MODS  += scullpipe
 MODS  += scullfifo
+MODS  += poll
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld

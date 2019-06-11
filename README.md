@@ -61,6 +61,8 @@
   - [scullpipe_test.c](tests/scullpipe_test.c): scullpipe.c self test
 - [scullfifo.c](scullfifo.c): FIFO version of the scullpipe.c
   - [scullfifo_test.c](tests/scullfifo_test.c): scullfifo.c self test
+- [poll.c](poll.c): select(2), poll(2), and epoll(7) test module
+  - [poll_test.c](tests/poll_test.c): poll.c self test
 
 ## Build
 

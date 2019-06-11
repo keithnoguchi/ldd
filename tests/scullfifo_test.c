@@ -208,8 +208,11 @@ static void test(const struct test *restrict t)
 	if (ret == -1)
 		goto perr;
 	nr = CPU_COUNT(&cpus);
+	memset(readers, 0, sizeof(readers));
 	for (i = 0; i < t->readers; i++) {
 		pthread_attr_t attr;
+
+		memset(&attr, 0, sizeof(attr));
 		CPU_ZERO(&cpus);
 		CPU_SET(i%nr, &cpus);
 		err = pthread_attr_setaffinity_np(&attr, sizeof(cpus), &cpus);
@@ -223,6 +226,7 @@ static void test(const struct test *restrict t)
 			goto perr;
 		}
 	}
+	memset(writers, 0, sizeof(writers));
 	for (i = 0; i < t->writers; i++) {
 		pthread_attr_t attr;
 		CPU_ZERO(&cpus);
