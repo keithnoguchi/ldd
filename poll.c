@@ -10,6 +10,7 @@
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include <linux/mutex.h>
+#include <linux/uaccess.h>
 #include <linux/poll.h>
 
 struct poll_device {
@@ -80,7 +81,8 @@ static size_t allocsiz(const struct poll_device *const dev)
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct poll_device *dev = fp->private_data;
-	ssize_t ret = -EAGAIN;
+	ssize_t rem, ret = -EAGAIN;
+	void *ptr;
 
 	if (!(fp->f_flags&O_NONBLOCK))
 		return -EINVAL;
@@ -91,12 +93,18 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 	ret = datalen(dev);
 	if (ret > count)
 		ret = count;
-	if (ret >= dev->bufsiz-dev->rpos) {
+	if (ret >= dev->bufsiz-dev->rpos)
 		/* no wrap around read support */
 		ret = dev->bufsiz-dev->rpos;
-		dev->rpos = 0;
-	} else
-		dev->rpos += ret;
+	ptr = dev->buf+dev->rpos;
+	rem = ret;
+	do {
+		size_t n = copy_to_user(buf, ptr, rem);
+		buf += rem-n;
+		ptr += rem-n;
+		rem = n;
+	} while (rem);
+	dev->rpos = (dev->rpos+ret)%dev->bufsiz;
 	*pos += ret;
 	wake_up_interruptible(&dev->outq);
 out:
@@ -107,7 +115,8 @@ out:
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct poll_device *dev = fp->private_data;
-	ssize_t ret = -EAGAIN;
+	ssize_t rem, ret = -EAGAIN;
+	void *ptr;
 
 	if (!(fp->f_flags&O_NONBLOCK))
 		return -EINVAL;
@@ -118,12 +127,18 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	ret = buflen(dev);
 	if (ret > count)
 		ret = count;
-	if (ret >= dev->bufsiz-dev->wpos) {
+	if (ret >= dev->bufsiz-dev->wpos)
 		/* no wrap around write support */
 		ret = dev->bufsiz-dev->wpos;
-		dev->wpos = 0;
-	} else
-		dev->wpos += ret;
+	ptr = dev->buf+dev->wpos;
+	rem = ret;
+	do {
+		size_t n = copy_from_user(ptr, buf, rem);
+		ptr += rem-n;
+		buf += rem-n;
+		rem = n;
+	} while (rem);
+	dev->wpos = (dev->wpos+ret)%dev->bufsiz;
 	*pos += ret;
 	wake_up_interruptible(&dev->inq);
 out:
