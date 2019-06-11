@@ -19,6 +19,10 @@ struct test {
 	unsigned int	pollers;
 	unsigned int	readers;
 	unsigned int	writers;
+	size_t		rbufsiz;
+	size_t		wbufsiz;
+	size_t		bufsiz;
+	size_t		alloc;
 	void		*(*poller)(void *);
 };
 
@@ -33,8 +37,12 @@ static void *selector(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
-	int rfds[t->readers], wfds[t->writers];
+	unsigned int nr = t->readers+t->writers;
+	size_t rremains[t->readers], wremains[t->writers];
+	int readers[t->readers], writers[t->writers];
 	char path[PATH_MAX];
+	fd_set rfds, wfds;
+	int nfds = 0;
 	int i, ret;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -45,28 +53,101 @@ static void *selector(void *arg)
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
-	memset(rfds, 0, sizeof(rfds));
+	FD_ZERO(&rfds);
+	memset(readers, 0, sizeof(readers));
 	for (i = 0; i < t->readers; i++) {
-		rfds[i] = open(path, O_RDONLY);
-		if (rfds[i] == -1)
+		readers[i] = open(path, O_RDONLY|O_NONBLOCK);
+		if (readers[i] == -1)
 			goto perr;
+		rremains[i] = t->rbufsiz;
+		FD_SET(readers[i], &rfds);
+		if (nfds < readers[i])
+			nfds = readers[i];
 	}
-	memset(wfds, 0, sizeof(wfds));
+	FD_ZERO(&wfds);
+	memset(writers, 0, sizeof(writers));
 	for (i = 0; i < t->writers; i++) {
-		wfds[i] = open(path, O_WRONLY);
-		if (wfds[i] == -1)
+		writers[i] = open(path, O_WRONLY|O_NONBLOCK);
+		if (writers[i] == -1)
 			goto perr;
+		wremains[i] = t->wbufsiz;
+		FD_SET(writers[i], &wfds);
+		if (nfds < writers[i])
+			nfds = writers[i];
+	}
+	nr = t->readers+t->writers;
+	while (nr) {
+		ret = select(nfds+1, &rfds, &wfds, NULL, NULL);
+		if (ret == -1)
+			goto perr;
+		for (i = 0; i < t->readers; i++) {
+			char rbuf[t->rbufsiz];
+			if (readers[i] == 0 || readers[i] == -1)
+				continue;
+			if (!FD_ISSET(readers[i], &rfds))
+				continue;
+			ret = read(readers[i], rbuf, rremains[i]);
+			if (ret == -1) {
+				if (errno == EAGAIN)
+					continue;
+				goto perr;
+			}
+			rremains[i] -= ret;
+			if (rremains[i])
+				continue;
+			if (close(readers[i]) == -1)
+				goto perr;
+			readers[i] = -1;
+			nr -= 1;
+		}
+		for (i = 0; i < t->writers; i++) {
+			char wbuf[t->wbufsiz];
+			if (writers[i] == 0 || writers[i] == -1)
+				continue;
+			if (!FD_ISSET(writers[i], &wfds))
+				continue;
+			ret = write(writers[i], wbuf, wremains[i]);
+			if (ret == -1) {
+				if (errno == EAGAIN)
+					continue;
+				goto perr;
+			}
+			wremains[i] -= ret;
+			if (wremains[i])
+				continue;
+			if (close(writers[i]) == -1)
+				goto perr;
+			writers[i] = -1;
+			nr -= 1;
+		}
+		FD_ZERO(&rfds);
+		nfds = 0;
+		for (i = 0; i < t->readers; i++) {
+			if (readers[i] == 0 || readers[i] == -1)
+				continue;
+			FD_SET(readers[i], &rfds);
+			if (nfds < readers[i])
+				nfds = readers[i];
+		}
+		FD_ZERO(&wfds);
+		for (i = 0; i < t->writers; i++) {
+			if (writers[i] == 0 || writers[i] == -1)
+				continue;
+			FD_SET(writers[i], &wfds);
+			if (nfds < writers[i])
+				nfds = writers[i];
+		}
 	}
 	for (i = 0; i < t->readers; i++) {
-		if (rfds[i] == 0 || rfds[i] == -1)
+		if (readers[i] == 0 || readers[i] == -1)
 			continue;
-		if (close(rfds[i]) == -1)
+		if (close(readers[i]) == -1)
 			goto perr;
 	}
 	for (i = 0; i < t->writers; i++) {
-		if (wfds[i] == 0 || wfds[i] == -1)
+		if (writers[i] == 0 || writers[i] == -1)
 			continue;
-		if (close(wfds[i]) == -1)
+		if (close(writers[i]) == -1)
 			goto perr;
 	}
 	return (void *)EXIT_SUCCESS;
@@ -184,6 +265,406 @@ int main(void)
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 1/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 2/1 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 2/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 2/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 4/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "1 select(2) poller with 4/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 1,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 1/1 reader/writer",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 1/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 2/1 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 2/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 2/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 4/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "2 select(2) pollers with 4/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 2,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 1/1 reader/writer",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 1/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 2/1 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 2/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 2/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 4/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "4 select(2) pollers with 4/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 4,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 1/1 reader/writer",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 1/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 2/1 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 2/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 2/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 4/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "16 select(2) pollers with 4/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 16,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 1/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 2/1 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 2/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 2/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 4/2 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= selector,
+		},
+		{
+			.name		= "32 select(2) pollers with 4/4 readers/writers",
+			.dev		= "poll0",
+			.pollers	= 32,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 			.poller		= selector,
 		},
 		{
@@ -192,6 +673,10 @@ int main(void)
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 			.poller		= poller,
 		},
 		{
@@ -200,54 +685,10 @@ int main(void)
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
-			.poller		= epoller,
-		},
-		{
-			.name		= "2 select(2) pollers with 2/2 readers/writers",
-			.dev		= "poll0",
-			.pollers	= 2,
-			.readers	= 2,
-			.writers	= 2,
-			.poller		= selector,
-		},
-		{
-			.name		= "2 poll(2) pollers with 2/2 readers/writers",
-			.dev		= "poll1",
-			.pollers	= 2,
-			.readers	= 2,
-			.writers	= 2,
-			.poller		= poller,
-		},
-		{
-			.name		= "2 epoll(7) pollers with 2/2 readers/writers",
-			.dev		= "poll2",
-			.pollers	= 2,
-			.readers	= 2,
-			.writers	= 2,
-			.poller		= epoller,
-		},
-		{
-			.name		= "2 select(2) pollers with 4/4 readers/writers",
-			.dev		= "poll0",
-			.pollers	= 2,
-			.readers	= 4,
-			.writers	= 4,
-			.poller		= selector,
-		},
-		{
-			.name		= "2 poll(2) pollers with 4/4 readers/writers",
-			.dev		= "poll1",
-			.pollers	= 2,
-			.readers	= 4,
-			.writers	= 4,
-			.poller		= poller,
-		},
-		{
-			.name		= "2 epoll(7) pollers with 4/4 readers/writers",
-			.dev		= "poll2",
-			.pollers	= 2,
-			.readers	= 4,
-			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
 			.poller		= epoller,
 		},
 		{.name = NULL},
