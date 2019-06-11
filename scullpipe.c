@@ -51,7 +51,7 @@ static int is_empty(const struct scullpipe_device *const dev)
 
 static int is_full(const struct scullpipe_device *const dev)
 {
-	return (dev->rpos+dev->wpos)%dev->bufsiz+1 == dev->bufsiz;
+	return (dev->wpos+1)%dev->bufsiz == dev->rpos;
 }
 
 static ssize_t data(const struct scullpipe_device *const dev)

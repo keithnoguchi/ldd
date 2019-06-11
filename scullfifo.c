@@ -51,7 +51,7 @@ static int is_empty(const struct scullfifo_device *const dev)
 
 static int is_full(const struct scullfifo_device *const dev)
 {
-	return (dev->rpos+dev->wpos+1)%dev->bufsiz == 0;
+	return (dev->wpos+1)%dev->bufsiz == dev->rpos;
 }
 
 static size_t datalen(const struct scullfifo_device *const dev)
