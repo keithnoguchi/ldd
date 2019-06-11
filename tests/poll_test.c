@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <poll.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <sched.h>
@@ -11,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/resource.h>
+#include <sys/select.h>
 #include "kselftest.h"
 
 struct test {
@@ -37,11 +39,11 @@ static void *selector(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
-	unsigned int nr = t->readers+t->writers;
 	size_t rremains[t->readers], wremains[t->writers];
 	int readers[t->readers], writers[t->writers];
 	char path[PATH_MAX];
 	fd_set rfds, wfds;
+	unsigned int total;
 	int nfds = 0;
 	int i, ret;
 
@@ -75,8 +77,8 @@ static void *selector(void *arg)
 		if (nfds < writers[i])
 			nfds = writers[i];
 	}
-	nr = t->readers+t->writers;
-	while (nr) {
+	total = t->readers+t->writers;
+	while (total) {
 		ret = select(nfds+1, &rfds, &wfds, NULL, NULL);
 		if (ret == -1)
 			goto perr;
@@ -98,7 +100,7 @@ static void *selector(void *arg)
 			if (close(readers[i]) == -1)
 				goto perr;
 			readers[i] = -1;
-			nr -= 1;
+			total--;
 		}
 		for (i = 0; i < t->writers; i++) {
 			char wbuf[t->wbufsiz];
@@ -118,7 +120,7 @@ static void *selector(void *arg)
 			if (close(writers[i]) == -1)
 				goto perr;
 			writers[i] = -1;
-			nr -= 1;
+			total--;
 		}
 		FD_ZERO(&rfds);
 		nfds = 0;
@@ -160,12 +162,102 @@ static void *poller(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
+	char rbuf[t->rbufsiz], wbuf[t->wbufsiz];
+	struct pollfd pfds[t->readers+t->writers];
+	size_t remains[t->readers+t->writers];
+	unsigned int nr, total;
+	char path[PATH_MAX];
+	int i, j, ret;
+
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
-	printf("poller for %s\n", t->name);
+
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+
+	memset(remains, 0, sizeof(remains));
+	memset(pfds, 0, sizeof(pfds));
+	j = 0;
+	for (i = 0; i < t->readers; i++) {
+		pfds[j].fd = open(path, O_RDONLY|O_NONBLOCK);
+		if (pfds[j].fd == -1)
+			goto perr;
+		pfds[j].events = POLLIN|POLLRDNORM;
+		remains[j] = t->rbufsiz;
+		j++;
+	}
+	for (i = 0; i < t->writers; i++) {
+		pfds[j].fd = open(path, O_WRONLY|O_NONBLOCK);
+		if (pfds[j].fd == -1)
+			goto perr;
+		pfds[j].events = POLLOUT|POLLWRNORM;
+		remains[j] = t->wbufsiz;
+		j++;
+	}
+	total = t->readers+t->writers;
+	while (total) {
+		ret = poll(pfds, sizeof(pfds), -1);
+		if (ret == -1)
+			goto perr;
+		else if (ret == 0)
+			continue;
+		nr = ret;
+		for (i = 0; i < t->readers+t->writers; i++) {
+			if (nr == 0)
+				break;
+			if (!pfds[i].revents)
+				continue;
+			if (pfds[i].revents&(POLLIN|POLLRDNORM)) {
+				nr--;
+				ret = read(pfds[i].fd, rbuf, remains[i]);
+				if (ret == -1) {
+					if (errno == EAGAIN)
+						continue;
+					goto perr;
+				}
+				remains[i] -= ret;
+				if (remains[i])
+					continue;
+				if (close(pfds[i].fd) == -1)
+					goto perr;
+				pfds[i].events = 0;
+				pfds[i].fd = -1;
+				total--;
+				continue;
+			}
+			if (pfds[i].revents&(POLLOUT|POLLWRNORM)) {
+				nr--;
+				ret = write(pfds[i].fd, wbuf, remains[i]);
+				if (ret == -1) {
+					if (errno == EAGAIN)
+						continue;
+					goto perr;
+				}
+				remains[i] -= ret;
+				if (remains[i])
+					continue;
+				if (close(pfds[i].fd) == -1)
+					goto perr;
+				pfds[i].events = 0;
+				pfds[i].fd = -1;
+				total--;
+				continue;
+			}
+		}
+	}
+	for (i = 0; i < t->readers+t->writers; i++) {
+		if (pfds[i].fd == -1)
+			continue;
+		if (close(pfds[i].fd) == -1)
+			goto perr;
+	}
 	return (void *)EXIT_SUCCESS;
+perr:
+	perror(t->name);
+	return (void *)EXIT_FAILURE;
 }
 
 static void *epoller(void *arg)
@@ -870,6 +962,522 @@ int main(void)
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 1/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 2/1 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 2/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 2/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 4/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 4/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 16/16 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 16,
+			.writers	= 16,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "1 poll(2) poller with 32/32 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 1,
+			.readers	= 32,
+			.writers	= 32,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 1/1 reader/writer",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 1/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 2/1 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 2/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 2/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 4/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 4/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 16/16 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 16,
+			.writers	= 16,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "2 poll(2) pollers with 32/32 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 2,
+			.readers	= 32,
+			.writers	= 32,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 1/1 reader/writer",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 1/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 2/1 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 2/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 2/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 4/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 4/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 16/16 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 16,
+			.writers	= 16,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "4 poll(2) pollers with 32/32 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 4,
+			.readers	= 32,
+			.writers	= 32,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 1/1 reader/writer",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 1,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 1/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 2/1 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 2/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 2/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 4/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 4/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 16/16 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 16,
+			.writers	= 16,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "16 poll(2) pollers with 32/32 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 16,
+			.readers	= 32,
+			.writers	= 32,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 1/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 1,
+			.writers	= 2,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 2/1 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 1,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 2/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 2/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 2,
+			.writers	= 4,
+			.rbufsiz	= 8192,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 4/2 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 4,
+			.writers	= 2,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 8192,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 4/4 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 4,
+			.writers	= 4,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 16/16 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 16,
+			.writers	= 16,
+			.rbufsiz	= 4096,
+			.wbufsiz	= 4096,
+			.bufsiz		= 4096,
+			.alloc		= 4096,
+			.poller		= poller,
+		},
+		{
+			.name		= "32 poll(2) pollers with 32/32 readers/writers",
+			.dev		= "poll1",
+			.pollers	= 32,
+			.readers	= 32,
+			.writers	= 32,
 			.rbufsiz	= 4096,
 			.wbufsiz	= 4096,
 			.bufsiz		= 4096,
