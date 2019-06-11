@@ -10,10 +10,13 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 struct scullfifo_device {
 	struct mutex	lock;
 	void		*buf;
+	size_t		rpos;
+	size_t		wpos;
 	size_t		bufsiz;
 	size_t		alloc;
 	unsigned int	readers;
@@ -39,15 +42,115 @@ static struct scullfifo_driver {
 	.base.owner	= THIS_MODULE,
 };
 
+static int is_empty(const struct scullfifo_device *const dev)
+{
+	return dev->rpos == dev->wpos;
+}
+
+static int is_full(const struct scullfifo_device *const dev)
+{
+	return (dev->rpos+dev->wpos+1)%dev->bufsiz == 0;
+}
+
+static size_t datasiz(const struct scullfifo_device *const dev)
+{
+	if (is_full(dev))
+		return dev->bufsiz-1;
+	else if (is_empty(dev))
+		return 0;
+	else if (dev->wpos > dev->rpos)
+		return dev->wpos-dev->rpos;
+	else
+		return dev->bufsiz-dev->rpos+dev->wpos;
+}
+
+static size_t bufsiz(const struct scullfifo_device *const dev)
+{
+	if (is_empty(dev))
+		return dev->bufsiz-1;
+	else if (is_full(dev))
+		return 0;
+	else if (dev->rpos > dev->wpos)
+		return dev->rpos-dev->wpos-1;
+	else
+		return dev->bufsiz-dev->wpos+dev->rpos-1;
+}
+
+static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+{
+	struct scullfifo_device *dev = fp->private_data;
+	size_t ret, rem;
+	void *ptr;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (is_empty(dev)) {
+		if (dev->writers == 0) {
+			ret = 0;
+			goto out;
+		}
+	}
+	ret = datasiz(dev);
+	if (ret > count)
+		ret = count;
+	/* no wrapped read */
+	if (dev->rpos+ret > dev->bufsiz)
+		ret = dev->bufsiz-dev->rpos;
+	ptr = dev->buf+dev->rpos;
+	rem = ret;
+	while (rem) {
+		rem = copy_to_user(buf, ptr, rem);
+		buf += ret-rem;
+		ptr += ret-rem;
+	}
+	dev->rpos = (dev->rpos+ret)%dev->bufsiz;
+	*pos += ret;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
+}
+
+static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
+{
+	struct scullfifo_device *dev = fp->private_data;
+	size_t ret, rem;
+	void *ptr;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (is_full(dev)) {
+		ret = -EWOULDBLOCK;
+		goto out;
+	}
+	ret = bufsiz(dev);
+	if (ret > count)
+		ret = count;
+	/* no wrapped write */
+	if (dev->wpos+ret > dev->bufsiz)
+		ret = dev->bufsiz-dev->wpos;
+	ptr = dev->buf+dev->wpos;
+	rem = ret;
+	while (rem) {
+		rem = copy_from_user(ptr, buf, rem);
+		ptr += ret-rem;
+		buf += ret-rem;
+	}
+	dev->wpos = (dev->wpos+ret)%dev->bufsiz;
+	*pos += ret;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
+}
+
 static int open(struct inode *ip, struct file *fp)
 {
 	struct scullfifo_device *dev = container_of(ip->i_cdev,
 						    struct scullfifo_device,
 						    cdev);
 
-	fp->private_data = dev;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
+	fp->private_data = dev;
 	switch (fp->f_flags&O_ACCMODE) {
 	case O_RDWR:
 		dev->readers++;
@@ -155,6 +258,8 @@ static ssize_t bufsiz_store(struct device *base, struct device_attribute *attr,
 		goto out;
 	}
 	dev->bufsiz = val;
+	dev->rpos = 0;
+	dev->wpos = 0;
 	err = count;
 	alloc = ((val-1)/PAGE_SIZE+1)*PAGE_SIZE;
 	if (alloc <= dev->alloc)
@@ -210,6 +315,8 @@ static int __init init_driver(struct scullfifo_driver *drv)
 	drv->type.groups	= scullfifo_groups;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner		= drv->base.owner;
+	drv->fops.read		= read;
+	drv->fops.write		= write;
 	drv->fops.open		= open;
 	drv->fops.release	= release;
 	return 0;
@@ -238,6 +345,8 @@ static int __init init(void)
 		mutex_init(&dev->lock);
 		dev->bufsiz		= drv->default_bufsiz;
 		dev->alloc		= ((dev->bufsiz-1)/PAGE_SIZE+1)*PAGE_SIZE;
+		dev->rpos		= 0;
+		dev->wpos		= 0;
 		dev->readers		= 0;
 		dev->writers		= 0;
 		dev->base.init_name	= name;
