@@ -223,6 +223,23 @@ static void test(const struct test *restrict t)
 			t->name, t->bufsiz, val);
 		goto err;
 	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->alloc) {
+		fprintf(stderr, "%s: unexpected initial alloc size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->alloc, val);
+		goto err;
+	}
 	ret = setrlimit(RLIMIT_NOFILE, &limit);
 	if (ret == -1)
 		goto perr;
@@ -290,6 +307,23 @@ static void test(const struct test *restrict t)
 	if (val != t->bufsiz) {
 		fprintf(stderr, "%s: unexpected final bufsiz:\n\t- want: %ld\n-  got: %ld\n",
 			t->name, t->bufsiz, val);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->alloc) {
+		fprintf(stderr, "%s: unexpected final alloc size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->alloc, val);
 		goto err;
 	}
 	exit(EXIT_SUCCESS);

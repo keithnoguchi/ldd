@@ -279,11 +279,25 @@ out:
 	mutex_unlock(&dev->lock);
 	return ret;
 }
-
 static DEVICE_ATTR_RW(bufsiz);
+
+static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
+			  char *page)
+{
+	struct poll_device *dev = container_of(base, struct poll_device, base);
+	size_t val;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	val = dev->alloc;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", val);
+}
+static DEVICE_ATTR_RO(alloc);
 
 static struct attribute *poll_attrs[] = {
 	&dev_attr_bufsiz.attr,
+	&dev_attr_alloc.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(poll);
