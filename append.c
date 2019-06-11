@@ -223,6 +223,7 @@ static int __init init(void)
 err:
 	for (dev = drv->devs; dev != end; dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
 module_init(init);
@@ -235,6 +236,7 @@ static void __exit term(void)
 
 	for (dev = drv->devs; dev != end; dev++)
 		cdev_device_del(&dev->cdev, &dev->base);
+	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
 
