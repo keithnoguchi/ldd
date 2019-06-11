@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <sched.h>
 #include <unistd.h>
@@ -31,12 +33,46 @@ static void *selector(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
+	int rfds[t->readers], wfds[t->writers];
+	char path[PATH_MAX];
+	int i, ret;
+
 	pthread_mutex_lock(&ctx->lock);
 	while (!ctx->start)
 		pthread_cond_wait(&ctx->cond, &ctx->lock);
 	pthread_mutex_unlock(&ctx->lock);
-	printf("selector for %s\n", t->name);
+
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+	memset(rfds, 0, sizeof(rfds));
+	for (i = 0; i < t->readers; i++) {
+		rfds[i] = open(path, O_RDONLY);
+		if (rfds[i] == -1)
+			goto perr;
+	}
+	memset(wfds, 0, sizeof(wfds));
+	for (i = 0; i < t->writers; i++) {
+		wfds[i] = open(path, O_WRONLY);
+		if (wfds[i] == -1)
+			goto perr;
+	}
+	for (i = 0; i < t->readers; i++) {
+		if (rfds[i] == 0 || rfds[i] == -1)
+			continue;
+		if (close(rfds[i]) == -1)
+			goto perr;
+	}
+	for (i = 0; i < t->writers; i++) {
+		if (wfds[i] == 0 || wfds[i] == -1)
+			continue;
+		if (close(wfds[i]) == -1)
+			goto perr;
+	}
 	return (void *)EXIT_SUCCESS;
+perr:
+	perror(t->name);
+	return (void *)EXIT_FAILURE;
 }
 
 static void *poller(void *arg)
@@ -144,6 +180,7 @@ int main(void)
 	const struct test *t, tests[] = {
 		{
 			.name		= "1 select(2) poller with 1/1 reader/writer",
+			.dev		= "poll0",
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
@@ -151,6 +188,7 @@ int main(void)
 		},
 		{
 			.name		= "1 poll(2) poller with 1/1 reader/writer",
+			.dev		= "poll1",
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
@@ -158,6 +196,7 @@ int main(void)
 		},
 		{
 			.name		= "1 epoll(7) poller with 1/1 reader/writer",
+			.dev		= "poll2",
 			.pollers	= 1,
 			.readers	= 1,
 			.writers	= 1,
@@ -165,6 +204,7 @@ int main(void)
 		},
 		{
 			.name		= "2 select(2) pollers with 2/2 readers/writers",
+			.dev		= "poll0",
 			.pollers	= 2,
 			.readers	= 2,
 			.writers	= 2,
@@ -172,6 +212,7 @@ int main(void)
 		},
 		{
 			.name		= "2 poll(2) pollers with 2/2 readers/writers",
+			.dev		= "poll1",
 			.pollers	= 2,
 			.readers	= 2,
 			.writers	= 2,
@@ -179,6 +220,7 @@ int main(void)
 		},
 		{
 			.name		= "2 epoll(7) pollers with 2/2 readers/writers",
+			.dev		= "poll2",
 			.pollers	= 2,
 			.readers	= 2,
 			.writers	= 2,
@@ -186,6 +228,7 @@ int main(void)
 		},
 		{
 			.name		= "2 select(2) pollers with 4/4 readers/writers",
+			.dev		= "poll0",
 			.pollers	= 2,
 			.readers	= 4,
 			.writers	= 4,
@@ -193,6 +236,7 @@ int main(void)
 		},
 		{
 			.name		= "2 poll(2) pollers with 4/4 readers/writers",
+			.dev		= "poll1",
 			.pollers	= 2,
 			.readers	= 4,
 			.writers	= 4,
@@ -200,6 +244,7 @@ int main(void)
 		},
 		{
 			.name		= "2 epoll(7) pollers with 4/4 readers/writers",
+			.dev		= "poll2",
 			.pollers	= 2,
 			.readers	= 4,
 			.writers	= 4,

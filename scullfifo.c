@@ -393,8 +393,10 @@ static int __init init(void)
 	}
 	return 0;
 err:
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
 		cdev_device_del(&dev->cdev, &dev->base);
+		kfree(dev->buf);
+	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
