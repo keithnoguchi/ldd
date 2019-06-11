@@ -81,15 +81,21 @@ static size_t allocsiz(const struct poll_device *const dev)
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct poll_device *dev = fp->private_data;
-	ssize_t rem, ret = -EAGAIN;
+	ssize_t ret, rem;
 	void *ptr;
 
-	if (!(fp->f_flags&O_NONBLOCK))
-		return -EINVAL;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (is_empty(dev))
-		goto out;
+	while (is_empty(dev)) {
+		mutex_unlock(&dev->lock);
+		if (fp->f_flags&O_NONBLOCK)
+			return -EAGAIN;
+		ret = wait_event_interruptible(dev->inq, !is_empty(dev));
+		if (ret)
+			return ret;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
+	}
 	ret = datalen(dev);
 	if (ret > count)
 		ret = count;
@@ -107,7 +113,6 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 	dev->rpos = (dev->rpos+ret)%dev->bufsiz;
 	*pos += ret;
 	wake_up_interruptible(&dev->outq);
-out:
 	mutex_unlock(&dev->lock);
 	return ret;
 }
@@ -115,15 +120,21 @@ out:
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
 	struct poll_device *dev = fp->private_data;
-	ssize_t rem, ret = -EAGAIN;
+	ssize_t ret, rem;
 	void *ptr;
 
-	if (!(fp->f_flags&O_NONBLOCK))
-		return -EINVAL;
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (is_full(dev))
-		goto out;
+	while (is_full(dev)) {
+		mutex_unlock(&dev->lock);
+		if (fp->f_flags&O_NONBLOCK)
+			return -EAGAIN;
+		ret = wait_event_interruptible(dev->outq, !is_full(dev));
+		if (ret)
+			return ret;
+		if (mutex_lock_interruptible(&dev->lock))
+			return -ERESTARTSYS;
+	}
 	ret = buflen(dev);
 	if (ret > count)
 		ret = count;
@@ -141,7 +152,6 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	dev->wpos = (dev->wpos+ret)%dev->bufsiz;
 	*pos += ret;
 	wake_up_interruptible(&dev->inq);
-out:
 	mutex_unlock(&dev->lock);
 	return ret;
 }
