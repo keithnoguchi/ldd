@@ -25,7 +25,7 @@ static int __init init(void)
 	err = snprintf(path, sizeof(path), "driver/%s", drv->base.name);
 	if (err < 0)
 		return err;
-	dir = proc_mkdir("driver/jit", NULL);
+	dir = proc_mkdir(path, NULL);
 	if (IS_ERR(dir))
 		return PTR_ERR(dir);
 	drv->top = dir;
