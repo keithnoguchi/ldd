@@ -22,6 +22,7 @@ MODS  += sleepy
 MODS  += scullpipe
 MODS  += scullfifo
 MODS  += poll
+MODS  += jit
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
