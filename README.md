@@ -64,6 +64,11 @@
 - [poll.c](poll.c): select(2), poll(2), and epoll(7) test module
   - [poll_test.c](tests/poll_test.c): poll.c self test
 
+### Time, Delays, and Deferred Work
+
+- [hz.c](hz.c): Exposing HZ and USER_HZ through /proc file system
+  - [hz_test.c](tests/hz_test.c): Testing /proc nodes exposed by hz.c
+
 ## Build
 
 ```sh
