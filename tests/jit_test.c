@@ -43,6 +43,14 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
+			.name	= "/proc/driver/jit/hz file",
+			.file	= "hz",
+		},
+		{
+			.name	= "/proc/driver/jit/user_hz file",
+			.file	= "user_hz",
+		},
+		{
 			.name	= "/proc/driver/jit/currenttime file",
 			.file	= "currenttime",
 		},
