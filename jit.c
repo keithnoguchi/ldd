@@ -11,10 +11,12 @@
 #include <linux/timekeeping.h>
 
 static struct jit_driver {
+	unsigned int		max_count;
 	struct proc_dir_entry	*top;
 	struct device_driver	base;
 	struct seq_operations	sops[1];
 } jit_driver = {
+	.max_count	= 128,
 	.top		= NULL,
 	.base.owner	= THIS_MODULE,
 	.base.name	= "jit",
@@ -22,7 +24,12 @@ static struct jit_driver {
 
 static void *start_currenttime(struct seq_file *m, loff_t *pos)
 {
-	return PDE_DATA(file_inode(m->file));
+	struct jit_driver *drv = PDE_DATA(file_inode(m->file));
+	if (*pos >= drv->max_count)
+		return NULL;
+	seq_printf(m, "%-10s %-18s %-s\n%29c %-s\n", "jiffies", "jiffies_64",
+		   "ktime_get_real_ts64", ' ', "ktime_get_real_fast_ns");
+	return drv;
 }
 
 static void stop_currenttime(struct seq_file *m, void *v)
@@ -32,7 +39,10 @@ static void stop_currenttime(struct seq_file *m, void *v)
 
 static void *next_currenttime(struct seq_file *m, void *v, loff_t *pos)
 {
-	return m->private;
+	struct jit_driver *drv = v;
+	if (++(*pos) >= drv->max_count)
+		return NULL;
+	return v;
 }
 
 static int show_currenttime(struct seq_file *m, void *v)
@@ -42,12 +52,9 @@ static int show_currenttime(struct seq_file *m, void *v)
 
 	ktime_get_real_ts64(&ts);
 	ns = ktime_get_real_fast_ns();
-	seq_printf(m, "0x%08lx 0x%016llx %10lld.%09ld (ktime_get_real_ts64)\n"
-		   "%29c %10lld.%09lld (ktime_get_real_fast_ns)\n",
+	seq_printf(m, "0x%08lx 0x%016llx %10lld.%09ld\n%29c %10lld.%09lld\n",
 		   jiffies&0xffffffff, get_jiffies_64(),
-		   ts.tv_sec, ts.tv_nsec,
-		   ' ',
-		   ns/NSEC_PER_SEC, ns%NSEC_PER_SEC);
+		   ts.tv_sec, ts.tv_nsec, ' ', ns/NSEC_PER_SEC, ns%NSEC_PER_SEC);
 	return 0;
 }
 
