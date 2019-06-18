@@ -50,8 +50,10 @@ reload: unload load
 # selftest based unit tests under tests directory.
 .PHONY: test run_tests clean_tests
 test $(TESTS): modules clean_tests reload
-	@TESTS="$(TESTS)" $(MAKE) -C tests $@
+	@# exclude rculock_test, as it crashes the kernel.
+	@TESTS="$(filter-out rculock_test,$(TESTS))" $(MAKE) -C tests $@
 run_tests: modules reload
-	@TESTS="$(TESTS)" $(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
+	@TESTS="$(filter-out rculock_test,$(TESTS))" $(MAKE) \
+		-C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests $@
 clean_tests:
 	@$(MAKE) -C tests top_srcdir=$(KDIR) OUTPUT=$(shell pwd)/tests clean
