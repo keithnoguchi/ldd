@@ -43,7 +43,7 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "read /proc/driver/jiffies file",
+			.name		= "/proc/driver/jiffies file",
 			.file		= "jiffies",
 		},
 		{.name = NULL},

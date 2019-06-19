@@ -3,60 +3,40 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/device.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/param.h>
 
 static struct hz_driver {
 	struct proc_dir_entry	*top;
-	struct device_driver	base;
+	const char		*const name;
 } hz_driver = {
-	.top		= NULL,
-	.base.owner	= THIS_MODULE,
-	.base.name	= "hz",
+	.top	= NULL,
+	.name	= "hz",
 };
 
 static int show_hz(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%d\n", HZ);
-	return 0;
-}
-
-static int show_user_hz(struct seq_file *m, void *v)
-{
-	seq_printf(m, "%d\n", USER_HZ);
+	seq_printf(m, "%7s %7s\n", "HZ", "USER_HZ");
+	seq_printf(m, "%7d %7d\n", HZ, USER_HZ);
 	return 0;
 }
 
 static int __init init(void)
 {
 	struct hz_driver *drv = &hz_driver;
-	struct proc_dir_entry *top, *d;
-	char path[10]; /* strlen("driver/")+strlen(drv->base.name) */
+	struct proc_dir_entry *top;
+	char path[10]; /* strlen("driver/")+strlen(drv->name) */
 	int err;
 
-	err = snprintf(path, sizeof(path), "driver/%s", drv->base.name);
+	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
-	top = proc_mkdir(path, NULL);
+	top = proc_create_single(path, 0, NULL, show_hz);
 	if (IS_ERR(top))
 		return PTR_ERR(top);
-	d = proc_create_single("hz", 0, top, show_hz);
-	if (IS_ERR(d)) {
-		err = PTR_ERR(d);
-		goto err;
-	}
-	d = proc_create_single("user_hz", 0, top, show_user_hz);
-	if (IS_ERR(d)) {
-		err = PTR_ERR(d);
-		goto err;
-	}
 	drv->top = top;
 	return 0;
-err:
-	proc_remove(top);
-	return err;
 }
 module_init(init);
 

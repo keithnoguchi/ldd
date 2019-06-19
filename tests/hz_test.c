@@ -22,7 +22,7 @@ static int test(const struct test *restrict t)
 	FILE *fp;
 	int ret;
 
-	ret = snprintf(path, sizeof(path), "/proc/driver/jit/%s", t->file);
+	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->file);
 	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
@@ -45,12 +45,8 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "/proc/driver/hz/hz file",
+			.name		= "/proc/driver/hz file",
 			.file		= "hz",
-		},
-		{
-			.name		= "/proc/driver/hz/user_hz file",
-			.file		= "user_hz",
 		},
 		{.name = NULL},
 	};
