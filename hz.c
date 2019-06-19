@@ -11,7 +11,6 @@ static struct hz_driver {
 	struct proc_dir_entry	*top;
 	const char		*const name;
 } hz_driver = {
-	.top	= NULL,
 	.name	= "hz",
 };
 

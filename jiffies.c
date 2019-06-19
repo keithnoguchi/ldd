@@ -10,13 +10,12 @@
 #include <linux/timekeeping.h>
 
 static struct jiffies_driver {
-	unsigned long		max_nr;
 	struct proc_dir_entry	*top;
+	const unsigned long	max_nr;
 	const char		*const name;
 	struct seq_operations	sops[1];
 } jiffies_driver = {
 	.max_nr	= 256,
-	.top	= NULL,
 	.name	= "jiffies",
 };
 

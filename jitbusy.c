@@ -3,29 +3,27 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <linux/device.h>
-#include <linux/mutex.h>
-#include <linux/uaccess.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/mutex.h>
+#include <linux/uaccess.h>
 #include <linux/jiffies.h>
 #include <asm/processor.h>
 
 static struct jitbusy_driver {
 	struct mutex		lock;
-	unsigned int		default_wait_ms;
 	unsigned int		wait_ms;
-	unsigned int		wait_max_nr;
 	char			buf[PAGE_SIZE];
 	struct proc_dir_entry	*top;
+	const unsigned int	wait_max_nr;
+	const unsigned int	default_wait_ms;
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
 } jitbusy_driver = {
-	.default_wait_ms	= 1000,	/* 1 sec */
 	.wait_max_nr		= 12,	/* 12 max waits */
-	.top			= NULL,
+	.default_wait_ms	= 1000,	/* 1 sec */
 	.name			= "jitbusy",
 };
 
