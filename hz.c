@@ -12,9 +12,9 @@ static struct hz_driver {
 	struct proc_dir_entry	*top;
 	struct device_driver	base;
 } hz_driver = {
-	.top				= NULL,
-	.base.owner			= THIS_MODULE,
-	.base.name			= "hz",
+	.top		= NULL,
+	.base.owner	= THIS_MODULE,
+	.base.name	= "hz",
 };
 
 static int show_hz(struct seq_file *m, void *v)

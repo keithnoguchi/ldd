@@ -67,7 +67,9 @@
 ### Time, Delays, and Deferred Work
 
 - [hz.c](hz.c): Exposing HZ and USER_HZ through /proc file system
-  - [hz_test.c](tests/hz_test.c): Testing /proc nodes exposed by hz.c
+  - [hz_test.c](tests/hz_test.c): hz.c self test
+- [jiffies.c](jiffies.c): Exposing jiffies, jiffies_64 and the like
+  - [jiffies_test.c](tests/jiffies_test.c): jiffies.c self test
 
 ## Build
 
