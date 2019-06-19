@@ -24,7 +24,7 @@ MODS  += scullfifo
 MODS  += poll
 MODS  += hz
 MODS  += jiffies
-MODS  += jit
+MODS  += jitbusy
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
