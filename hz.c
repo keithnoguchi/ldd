@@ -15,7 +15,7 @@ static struct hz_driver {
 	.name	= "hz",
 };
 
-static int show_hz(struct seq_file *m, void *v)
+static int show(struct seq_file *m, void *v)
 {
 	seq_printf(m, "%7s %-7s\n", "HZ", "USER_HZ");
 	seq_printf(m, "%7d %-7d\n", HZ, USER_HZ);
@@ -32,7 +32,7 @@ static int __init init(void)
 	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
-	top = proc_create_single(path, 0, NULL, show_hz);
+	top = proc_create_single(path, 0, NULL, show);
 	if (IS_ERR(top))
 		return PTR_ERR(top);
 	drv->top = top;

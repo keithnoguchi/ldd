@@ -20,7 +20,7 @@ static struct jiffies_driver {
 	.name	= "jiffies",
 };
 
-static void *start_jiffies(struct seq_file *m, loff_t *pos)
+static void *start(struct seq_file *m, loff_t *pos)
 {
 	struct jiffies_driver *drv = PDE_DATA(file_inode(m->file));
 	if (*pos >= drv->max_nr)
@@ -31,12 +31,12 @@ static void *start_jiffies(struct seq_file *m, loff_t *pos)
 	return drv;
 }
 
-static void stop_jiffies(struct seq_file *m, void *v)
+static void stop(struct seq_file *m, void *v)
 {
 	return;
 }
 
-static void *next_jiffies(struct seq_file *m, void *v, loff_t *pos)
+static void *next(struct seq_file *m, void *v, loff_t *pos)
 {
 	struct jiffies_driver *drv = v;
 	if (++(*pos) >= drv->max_nr)
@@ -44,7 +44,7 @@ static void *next_jiffies(struct seq_file *m, void *v, loff_t *pos)
 	return v;
 }
 
-static int show_jiffies(struct seq_file *m, void *v)
+static int show(struct seq_file *m, void *v)
 {
 	struct timespec64 ts;
 	u64 ns;
@@ -70,10 +70,10 @@ static int __init init(void)
 	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
-	sops->start	= start_jiffies;
-	sops->stop	= stop_jiffies;
-	sops->next	= next_jiffies;
-	sops->show	= show_jiffies;
+	sops->start	= start;
+	sops->stop	= stop;
+	sops->next	= next;
+	sops->show	= show;
 	top = proc_create_seq_data(path, 0, NULL, sops, drv);
 	if (IS_ERR(top))
 		return PTR_ERR(top);
