@@ -2,20 +2,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
-#include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include "kselftest.h"
 
 struct test {
 	const char	*const name;
-	long		wait_ms;
+	unsigned long	wait_ms;
 };
 
 static int test(const struct test *restrict t)
 {
-	const char *const path = "/proc/driver/jitsched";
+	const char *const path = "/proc/driver/jitqueue";
 	char buf[512];
 	FILE *fp;
 	int ret;
@@ -26,7 +24,7 @@ static int test(const struct test *restrict t)
 	ret = snprintf(buf, sizeof(buf), "%ld\n", t->wait_ms);
 	if (ret < 0)
 		goto perr;
-	ret = fwrite(buf, sizeof(buf), 1, fp);
+	ret = fwrite(buf, strlen(buf), 1, fp);
 	if (ret == -1)
 		goto perr;
 	if (fclose(fp) == -1)
@@ -36,8 +34,6 @@ static int test(const struct test *restrict t)
 		goto perr;
 	ret = fread(buf, sizeof(buf), 1, fp);
 	if (ret == 0 && ferror(fp))
-		goto perr;
-	if (fclose(fp) == -1)
 		goto perr;
 	buf[sizeof(buf)-1] = '\0';
 	fprintf(stdout, "%s:\n%s\n", t->name, buf);
@@ -60,19 +56,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "scheduled wait with 1ms interval",
+			.name		= "wait queue based wait with 1ms interval",
 			.wait_ms	= 1,
 		},
 		{
-			.name		= "scheduled wait with 2ms interval",
+			.name		= "wait queue based wait with 2ms interval",
 			.wait_ms	= 2,
 		},
 		{
-			.name		= "scheduled wait with 4ms interval",
+			.name		= "wait queue based wait with 4ms interval",
 			.wait_ms	= 4,
 		},
 		{
-			.name		= "scheduled wait with 8ms interval",
+			.name		= "wait queue based wait with 8ms interval",
 			.wait_ms	= 8,
 		},
 		{.name = NULL},
@@ -92,7 +88,7 @@ int main(void)
 		if (ret == -1)
 			goto perr;
 		if (WIFSIGNALED(status)) {
-			fprintf(stderr, "%s: signaled by %s\n",
+			fprintf(stderr, "%s: signaled with %s\n",
 				t->name, strsignal(WTERMSIG(status)));
 			goto err;
 		}

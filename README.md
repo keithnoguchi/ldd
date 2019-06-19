@@ -66,14 +66,27 @@
 
 ### Time, Delays, and Deferred Work
 
-- [hz.c](hz.c): Exposing HZ and USER_HZ through /proc file system
-  - [hz_test.c](tests/hz_test.c): hz.c self test
-- [jiffies.c](jiffies.c): Exposing jiffies, jiffies_64 and the like
-  - [jiffies_test.c](tests/jiffies_test.c): jiffies.c self test
-- [jitbusy.c](jitbusy.c): Busy wait test module
-  - [jitbusy_test.c](tests/jitbusy_test.c): jitbusy.c self test
-- [jitsched.c](jitsched.c): Scheduled wait test module
-  - [jitsched_test.c](tests/jitsched_test.c): jitsched.c self test
+- [hz.c]: Exposing HZ and USER_HZ through /proc file system
+  - [hz_test.c]: [hz.c] self test
+- [jiffies.c]: Exposing jiffies, jiffies_64 and the like
+  - [jiffies_test.c]: [jiffies.c] self test
+- [jitbusy.c]: Busy wait test module
+  - [jitbusy_test.c]: [jitbusy.c] self test
+- [jitsched.c]: Scheduled wait test module
+  - [jitsched_test.c]: [jitsched.c] self test
+- [jitqueue.c]: Wait queue based wait test module
+  - [jitqueue_test.c]: [jitqueue.c] self test
+
+[hz.c]: hz.c
+[jiffies.c]: jiffies.c
+[jitbusy.c]: jitbusy.c
+[jitsched.c]: jitsched.c
+[jitqueue.c]: jitqueue.c
+[hz_test.c]: tests/hz_test.c
+[jiffies_test.c]: tests/jiffies_test.c
+[jitbusy_test.c]: tests/jitbusy_test.c
+[jitsched_test.c]: tests/jitsched_test.c
+[jitqueue_test.c]: tests/jitqueue_test.c
 
 ## Build
 

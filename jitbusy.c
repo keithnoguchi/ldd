@@ -9,6 +9,7 @@
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
 #include <linux/jiffies.h>
+#include <asm/page.h>
 #include <asm/processor.h>
 
 static struct jitbusy_driver {
@@ -119,12 +120,12 @@ static int __init init(void)
 	fops->write	= write;
 	fops->open	= open;
 	fops->release	= seq_release;
-	drv->wait_ms	= drv->default_wait_ms;
 	top = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
 	if (IS_ERR(top))
 		return PTR_ERR(top);
 	mutex_init(&drv->lock);
-	drv->top = top;
+	drv->wait_ms	= drv->default_wait_ms;
+	drv->top	= top;
 	return 0;
 }
 module_init(init);

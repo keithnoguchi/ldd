@@ -9,10 +9,10 @@
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
 #include <linux/jiffies.h>
-#include <linux/sched.h>
+#include <linux/wait.h>
 #include <asm/page.h>
 
-static struct jitsched_driver {
+struct jitqueue_driver {
 	struct mutex		lock;
 	unsigned int		wait_ms;
 	char			buf[PAGE_SIZE];
@@ -22,15 +22,15 @@ static struct jitsched_driver {
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
-} jitsched_driver = {
-	.wait_max_nr		= 12,	/* 12 max sched waits */
+} jitqueue_driver = {
+	.wait_max_nr		= 12,	/* 12 max wait queue based waits */
 	.default_wait_ms	= 1000,	/* 1 sec */
-	.name			= "jitsched",
+	.name			= "jitqueue",
 };
 
 static void *start(struct seq_file *m, loff_t *pos)
 {
-	struct jitsched_driver *drv = PDE_DATA(file_inode(m->file));
+	struct jitqueue_driver *drv = PDE_DATA(file_inode(m->file));
 	if (*pos >= drv->wait_max_nr)
 		return NULL;
 	seq_printf(m, "%9s %9s\n", "start", "end");
@@ -44,27 +44,32 @@ static void stop(struct seq_file *m, void *v)
 
 static void *next(struct seq_file *m, void *v, loff_t *pos)
 {
-	struct jitsched_driver *drv = v;
+	struct jitqueue_driver *drv = v;
 	if (++(*pos) >= drv->wait_max_nr)
 		return NULL;
-	return v;
+	return drv;
 }
 
 static int show(struct seq_file *m, void *v)
 {
-	struct jitsched_driver *drv = v;
+	struct jitqueue_driver *drv = v;
 	unsigned long start = jiffies;
-	unsigned long end = start+HZ*drv->wait_ms/MSEC_PER_SEC;
-	while (time_before(jiffies, end))
-		schedule();
-	seq_printf(m, "%9ld %9ld\n", start&0xffffffff, jiffies&0xffffffff);
-	return 0;
+	long delay = HZ*drv->wait_ms/MSEC_PER_SEC;
+	wait_queue_head_t wq;
+
+	init_waitqueue_head(&wq);
+	do {
+		delay = wait_event_interruptible_timeout(wq, 0, delay);
+	} while (delay > 1);
+	seq_printf(m, "%9ld %9ld\n", start&0xffffffff,
+		   jiffies&0xffffffff);
+	return delay;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 		     loff_t *pos)
 {
-	struct jitsched_driver *drv = PDE_DATA(file_inode(fp));
+	struct jitqueue_driver *drv = PDE_DATA(file_inode(fp));
 	long ms;
 	int ret;
 
@@ -77,7 +82,6 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 	ret = kstrtol(drv->buf, 10, &ms);
 	if (ret)
 		goto out;
-	/* ignore the out of range values */
 	if (ms < 0 || ms > LONG_MAX) {
 		ret = -EINVAL;
 		goto out;
@@ -94,13 +98,13 @@ out:
 
 static int open(struct inode *ip, struct file *fp)
 {
-	struct jitsched_driver *drv = PDE_DATA(ip);
+	struct jitqueue_driver *drv = PDE_DATA(ip);
 	return seq_open(fp, drv->sops);
 }
 
 static int __init init(void)
 {
-	struct jitsched_driver *drv = &jitsched_driver;
+	struct jitqueue_driver *drv = &jitqueue_driver;
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
 	struct proc_dir_entry *top;
@@ -114,7 +118,7 @@ static int __init init(void)
 	sops->stop	= stop;
 	sops->next	= next;
 	sops->show	= show;
-	fops->owner	= THIS_MODULE,
+	fops->owner	= THIS_MODULE;
 	fops->read	= seq_read;
 	fops->write	= write;
 	fops->open	= open;
@@ -131,11 +135,11 @@ module_init(init);
 
 static void __exit term(void)
 {
-	struct jitsched_driver *drv = &jitsched_driver;
+	struct jitqueue_driver *drv = &jitqueue_driver;
 	proc_remove(drv->top);
 }
 module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Just In Time scheduled wait module");
+MODULE_DESCRIPTION("Just In Time wait queued wait module");

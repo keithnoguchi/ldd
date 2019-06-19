@@ -44,10 +44,7 @@ static int test(const struct test *restrict t)
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
-	ret = snprintf(buf, sizeof(buf), "0\n");
-	if (ret < 0)
-		goto perr;
-	ret = fwrite(buf, sizeof(buf), 1, fp);
+	ret = fputs("0\n", fp);
 	if (ret == -1)
 		goto perr;
 	if (fclose(fp) == -1)
