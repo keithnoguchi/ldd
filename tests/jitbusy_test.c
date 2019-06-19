@@ -10,7 +10,7 @@
 
 struct test {
 	const char	*const name;
-	unsigned long	wait_ms;
+	unsigned long	delay_ms;
 };
 
 static int test(const struct test *restrict t)
@@ -23,7 +23,7 @@ static int test(const struct test *restrict t)
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
-	ret = snprintf(buf, sizeof(buf), "%ld\n", t->wait_ms);
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->delay_ms);
 	if (ret < 0)
 		goto perr;
 	ret = fwrite(buf, sizeof(buf), 1, fp);
@@ -60,19 +60,19 @@ int main(void)
 	const struct test *t, tests[] = {
 		{
 			.name		= "busy wait based 1ms delay",
-			.wait_ms	= 1,
+			.delay_ms	= 1,
 		},
 		{
 			.name		= "busy wait based 2ms delay",
-			.wait_ms	= 2,
+			.delay_ms	= 2,
 		},
 		{
 			.name		= "busy wait based 4ms delay",
-			.wait_ms	= 4,
+			.delay_ms	= 4,
 		},
 		{
 			.name		= "busy wait based 8ms delay",
-			.wait_ms	= 8,
+			.delay_ms	= 8,
 		},
 		{.name = NULL},
 	};

@@ -2,7 +2,6 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/timex.h>
@@ -10,7 +9,7 @@
 #include <linux/timekeeping.h>
 
 static struct jiffies_driver {
-	struct proc_dir_entry	*top;
+	struct proc_dir_entry	*proc;
 	const unsigned long	max_nr;
 	const char		*const name;
 	struct seq_operations	sops[1];
@@ -62,7 +61,7 @@ static int __init init(void)
 {
 	struct jiffies_driver *drv = &jiffies_driver;
 	struct seq_operations *sops = drv->sops;
-	struct proc_dir_entry *top;
+	struct proc_dir_entry *proc;
 	char path[15]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
@@ -73,10 +72,10 @@ static int __init init(void)
 	sops->stop	= stop;
 	sops->next	= next;
 	sops->show	= show;
-	top = proc_create_seq_data(path, 0, NULL, sops, drv);
-	if (IS_ERR(top))
-		return PTR_ERR(top);
-	drv->top = top;
+	proc = proc_create_seq_data(path, 0, NULL, sops, drv);
+	if (IS_ERR(proc))
+		return PTR_ERR(proc);
+	drv->proc = proc;
 	return 0;
 }
 module_init(init);
@@ -84,7 +83,7 @@ module_init(init);
 static void __exit term(void)
 {
 	struct jiffies_driver *drv = &jiffies_driver;
-	proc_remove(drv->top);
+	proc_remove(drv->proc);
 }
 module_exit(term);
 

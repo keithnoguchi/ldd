@@ -3,11 +3,14 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/limits.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
+#include <linux/param.h>
+#include <linux/time64.h>
 #include <linux/jiffies.h>
 #include <linux/sched.h>
 #include <asm/page.h>
@@ -16,7 +19,7 @@ static struct jitsched_driver {
 	struct mutex		lock;
 	unsigned int		delay_ms;
 	char			buf[PAGE_SIZE];
-	struct proc_dir_entry	*top;
+	struct proc_dir_entry	*proc;
 	const unsigned int	max_retry;
 	const unsigned int	default_delay_ms;
 	const char		*const name;
@@ -33,7 +36,7 @@ static void *start(struct seq_file *m, loff_t *pos)
 	struct jitsched_driver *drv = PDE_DATA(file_inode(m->file));
 	if (*pos >= drv->max_retry)
 		return NULL;
-	seq_printf(m, "%9s %9s\n", "start", "end");
+	seq_printf(m, "%9s %9s\n", "before", "after");
 	return drv;
 }
 
@@ -103,7 +106,7 @@ static int __init init(void)
 	struct jitsched_driver *drv = &jitsched_driver;
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
-	struct proc_dir_entry *top;
+	struct proc_dir_entry *proc;
 	char path[16]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
@@ -119,12 +122,12 @@ static int __init init(void)
 	fops->write	= write;
 	fops->open	= open;
 	fops->release	= seq_release;
-	top = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
-	if (IS_ERR(top))
-		return PTR_ERR(top);
+	proc = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
+	if (IS_ERR(proc))
+		return PTR_ERR(proc);
 	mutex_init(&drv->lock);
 	drv->delay_ms	= drv->default_delay_ms;
-	drv->top	= top;
+	drv->proc	= proc;
 	return 0;
 }
 module_init(init);
@@ -132,7 +135,7 @@ module_init(init);
 static void __exit term(void)
 {
 	struct jitsched_driver *drv = &jitsched_driver;
-	proc_remove(drv->top);
+	proc_remove(drv->proc);
 }
 module_exit(term);
 

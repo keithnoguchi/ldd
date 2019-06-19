@@ -2,13 +2,12 @@
 #include <linux/init.h>
 #include <linux/types.h>
 #include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/param.h>
 
 static struct hz_driver {
-	struct proc_dir_entry	*top;
+	struct proc_dir_entry	*proc;
 	const char		*const name;
 } hz_driver = {
 	.name	= "hz",
@@ -24,17 +23,17 @@ static int show(struct seq_file *m, void *v)
 static int __init init(void)
 {
 	struct hz_driver *drv = &hz_driver;
-	struct proc_dir_entry *top;
+	struct proc_dir_entry *proc;
 	char path[10]; /* strlen("driver/")+strlen(drv->name) */
 	int err;
 
 	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
-	top = proc_create_single(path, 0, NULL, show);
-	if (IS_ERR(top))
-		return PTR_ERR(top);
-	drv->top = top;
+	proc = proc_create_single(path, 0, NULL, show);
+	if (IS_ERR(proc))
+		return PTR_ERR(proc);
+	drv->proc = proc;
 	return 0;
 }
 module_init(init);
@@ -42,7 +41,7 @@ module_init(init);
 static void __exit term(void)
 {
 	struct hz_driver *drv = &hz_driver;
-	proc_remove(drv->top);
+	proc_remove(drv->proc);
 }
 module_exit(term);
 

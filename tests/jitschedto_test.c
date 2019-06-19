@@ -2,7 +2,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <limits.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -10,12 +9,12 @@
 
 struct test {
 	const char	*const name;
-	long		delay_ms;
+	unsigned long	delay_ms;
 };
 
-static int test(const struct test *restrict t)
+static void test(const struct test *restrict t)
 {
-	const char *const path = "/proc/driver/jitsched";
+	const char *const path = "/proc/driver/jitschedto";
 	char buf[512];
 	FILE *fp;
 	int ret;
@@ -41,7 +40,6 @@ static int test(const struct test *restrict t)
 		goto perr;
 	buf[sizeof(buf)-1] = '\0';
 	fprintf(stdout, "%s:\n%s\n", t->name, buf);
-	/* reset the wait ms */
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
@@ -60,19 +58,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "schedule based 1ms delay",
+			.name		= "schedule_timeout() based 1ms delay",
 			.delay_ms	= 1,
 		},
 		{
-			.name		= "schedule based 2ms delay",
+			.name		= "schedule_timeout() based 2ms delay",
 			.delay_ms	= 2,
 		},
 		{
-			.name		= "schedule based 4ms delay",
+			.name		= "schedule_timeout() based 4ms delay",
 			.delay_ms	= 4,
 		},
 		{
-			.name		= "schedule based 8ms delay",
+			.name		= "schedule_timeout() based 8ms delay",
 			.delay_ms	= 8,
 		},
 		{.name = NULL},
@@ -92,7 +90,7 @@ int main(void)
 		if (ret == -1)
 			goto perr;
 		if (WIFSIGNALED(status)) {
-			fprintf(stderr, "%s: signaled by %s\n",
+			fprintf(stderr, "%s: signaled with %s\n",
 				t->name, strsignal(WTERMSIG(status)));
 			goto err;
 		}

@@ -3,11 +3,14 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/limits.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/mutex.h>
 #include <linux/uaccess.h>
+#include <linux/param.h>
+#include <linux/time64.h>
 #include <linux/jiffies.h>
 #include <asm/page.h>
 #include <asm/processor.h>
@@ -16,7 +19,7 @@ static struct jitbusy_driver {
 	struct mutex		lock;
 	unsigned int		delay_ms;
 	char			buf[PAGE_SIZE];
-	struct proc_dir_entry	*top;
+	struct proc_dir_entry	*proc;
 	const unsigned int	max_retry;
 	const unsigned int	default_delay_ms;
 	const char		*const name;
@@ -33,7 +36,7 @@ static void *start(struct seq_file *m, loff_t *pos)
 	struct jitbusy_driver *drv = PDE_DATA(file_inode(m->file));
 	if (*pos >= drv->max_retry)
 		return NULL;
-	seq_printf(m, "%9s %9s\n", "start", "end");
+	seq_printf(m, "%9s %9s\n", "before", "after");
 	return drv;
 }
 
@@ -55,8 +58,9 @@ static int show(struct seq_file *m, void *v)
 	struct jitbusy_driver *drv = v;
 	unsigned long start = jiffies;
 	unsigned long end = start+HZ*drv->delay_ms/MSEC_PER_SEC;
-	while (time_before(jiffies, end))
+	do {
 		cpu_relax();
+	} while (time_before(jiffies, end));
 	seq_printf(m, "%9ld %9ld\n", start&0xffffffff, jiffies&0xffffffff);
 	return 0;
 }
@@ -104,7 +108,7 @@ static int __init init(void)
 	struct jitbusy_driver *drv = &jitbusy_driver;
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
-	struct proc_dir_entry *top;
+	struct proc_dir_entry *proc;
 	char path[15]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
@@ -120,12 +124,12 @@ static int __init init(void)
 	fops->write	= write;
 	fops->open	= open;
 	fops->release	= seq_release;
-	top = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
-	if (IS_ERR(top))
-		return PTR_ERR(top);
+	proc = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
+	if (IS_ERR(proc))
+		return PTR_ERR(proc);
 	mutex_init(&drv->lock);
 	drv->delay_ms	= drv->default_delay_ms;
-	drv->top	= top;
+	drv->proc	= proc;
 	return 0;
 }
 module_init(init);
@@ -133,7 +137,7 @@ module_init(init);
 static void __exit term(void)
 {
 	struct jitbusy_driver *drv = &jitbusy_driver;
-	proc_remove(drv->top);
+	proc_remove(drv->proc);
 }
 module_exit(term);
 
