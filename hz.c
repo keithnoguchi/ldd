@@ -17,8 +17,8 @@ static struct hz_driver {
 
 static int show_hz(struct seq_file *m, void *v)
 {
-	seq_printf(m, "%7s %7s\n", "HZ", "USER_HZ");
-	seq_printf(m, "%7d %7d\n", HZ, USER_HZ);
+	seq_printf(m, "%7s %-7s\n", "HZ", "USER_HZ");
+	seq_printf(m, "%7d %-7d\n", HZ, USER_HZ);
 	return 0;
 }
 

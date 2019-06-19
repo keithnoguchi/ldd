@@ -10,21 +10,15 @@
 
 struct test {
 	const char	*const name;
-	const char	*const file;
-	const char	*const wait_file;
-	long		wait_msec;
 };
 
 static int test(const struct test *restrict t)
 {
-	char path[PATH_MAX];
+	const char *const path = "/proc/driver/hz";
 	char buf[512];
 	FILE *fp;
 	int ret;
 
-	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->file);
-	if (ret < 0)
-		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
@@ -45,8 +39,7 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "/proc/driver/hz file",
-			.file		= "hz",
+			.name		= "read /proc/driver/hz file",
 		},
 		{.name = NULL},
 	};
