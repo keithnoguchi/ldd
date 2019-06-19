@@ -60,19 +60,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "scheduled wait with 1ms interval",
+			.name		= "schedule based 1ms delay",
 			.wait_ms	= 1,
 		},
 		{
-			.name		= "scheduled wait with 2ms interval",
+			.name		= "schedule based 2ms delay",
 			.wait_ms	= 2,
 		},
 		{
-			.name		= "scheduled wait with 4ms interval",
+			.name		= "schedule based 4ms delay",
 			.wait_ms	= 4,
 		},
 		{
-			.name		= "scheduled wait with 8ms interval",
+			.name		= "schedule based 8ms delay",
 			.wait_ms	= 8,
 		},
 		{.name = NULL},

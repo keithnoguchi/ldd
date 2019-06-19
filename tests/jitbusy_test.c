@@ -59,19 +59,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "busy wait with 1ms interval",
+			.name		= "busy wait based 1ms delay",
 			.wait_ms	= 1,
 		},
 		{
-			.name		= "busy wait with 2ms interval",
+			.name		= "busy wait based 2ms delay",
 			.wait_ms	= 2,
 		},
 		{
-			.name		= "busy wait with 4ms interval",
+			.name		= "busy wait based 4ms delay",
 			.wait_ms	= 4,
 		},
 		{
-			.name		= "busy wait with 8ms interval",
+			.name		= "busy wait based 8ms delay",
 			.wait_ms	= 8,
 		},
 		{.name = NULL},

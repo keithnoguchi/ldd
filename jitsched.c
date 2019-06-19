@@ -14,24 +14,24 @@
 
 static struct jitsched_driver {
 	struct mutex		lock;
-	unsigned int		wait_ms;
+	unsigned int		delay_ms;
 	char			buf[PAGE_SIZE];
 	struct proc_dir_entry	*top;
-	const unsigned int	wait_max_nr;
-	const unsigned int	default_wait_ms;
+	const unsigned int	max_retry;
+	const unsigned int	default_delay_ms;
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
 } jitsched_driver = {
-	.wait_max_nr		= 12,	/* 12 max sched waits */
-	.default_wait_ms	= 1000,	/* 1 sec */
+	.max_retry		= 12,	/* max retry */
+	.default_delay_ms	= 1000,	/* 1 sec */
 	.name			= "jitsched",
 };
 
 static void *start(struct seq_file *m, loff_t *pos)
 {
 	struct jitsched_driver *drv = PDE_DATA(file_inode(m->file));
-	if (*pos >= drv->wait_max_nr)
+	if (*pos >= drv->max_retry)
 		return NULL;
 	seq_printf(m, "%9s %9s\n", "start", "end");
 	return drv;
@@ -45,7 +45,7 @@ static void stop(struct seq_file *m, void *v)
 static void *next(struct seq_file *m, void *v, loff_t *pos)
 {
 	struct jitsched_driver *drv = v;
-	if (++(*pos) >= drv->wait_max_nr)
+	if (++(*pos) >= drv->max_retry)
 		return NULL;
 	return v;
 }
@@ -54,7 +54,7 @@ static int show(struct seq_file *m, void *v)
 {
 	struct jitsched_driver *drv = v;
 	unsigned long start = jiffies;
-	unsigned long end = start+HZ*drv->wait_ms/MSEC_PER_SEC;
+	unsigned long end = start+HZ*drv->delay_ms/MSEC_PER_SEC;
 	while (time_before(jiffies, end))
 		schedule();
 	seq_printf(m, "%9ld %9ld\n", start&0xffffffff, jiffies&0xffffffff);
@@ -83,9 +83,9 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 		goto out;
 	}
 	if (ms == 0)
-		drv->wait_ms = drv->default_wait_ms;
+		drv->delay_ms = drv->default_delay_ms;
 	else
-		drv->wait_ms = ms;
+		drv->delay_ms = ms;
 	ret = count;
 out:
 	mutex_unlock(&drv->lock);
@@ -123,7 +123,7 @@ static int __init init(void)
 	if (IS_ERR(top))
 		return PTR_ERR(top);
 	mutex_init(&drv->lock);
-	drv->wait_ms	= drv->default_wait_ms;
+	drv->delay_ms	= drv->default_delay_ms;
 	drv->top	= top;
 	return 0;
 }
@@ -138,4 +138,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Just In Time scheduled wait module");
+MODULE_DESCRIPTION("Just In Time schedule based delay module");

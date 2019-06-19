@@ -70,11 +70,11 @@
   - [hz_test.c]: [hz.c] self test
 - [jiffies.c]: Exposing jiffies, jiffies_64 and the like
   - [jiffies_test.c]: [jiffies.c] self test
-- [jitbusy.c]: Busy wait test module
+- [jitbusy.c]: Busy wait based delay module
   - [jitbusy_test.c]: [jitbusy.c] self test
-- [jitsched.c]: Scheduled wait test module
+- [jitsched.c]: Schedule based delay module
   - [jitsched_test.c]: [jitsched.c] self test
-- [jitqueue.c]: Wait queue based wait test module
+- [jitqueue.c]: Wait queue based delay module
   - [jitqueue_test.c]: [jitqueue.c] self test
 
 [hz.c]: hz.c
