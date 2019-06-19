@@ -70,6 +70,10 @@
   - [hz_test.c](tests/hz_test.c): hz.c self test
 - [jiffies.c](jiffies.c): Exposing jiffies, jiffies_64 and the like
   - [jiffies_test.c](tests/jiffies_test.c): jiffies.c self test
+- [jitbusy.c](jitbusy.c): Busy wait test module
+  - [jitbusy_test.c](tests/jitbusy_test.c): jitbusy.c self test
+- [jitsched.c](jitsched.c): Scheduled wait test module
+  - [jitsched_test.c](tests/jitsched_test.c): jitsched.c self test
 
 ## Build
 

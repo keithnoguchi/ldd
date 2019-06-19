@@ -10,12 +10,12 @@
 
 struct test {
 	const char	*const name;
-	unsigned long	wait_ms;
+	long		wait_ms;
 };
 
 static int test(const struct test *restrict t)
 {
-	const char *const path = "/proc/driver/jitbusy";
+	const char *const path = "/proc/driver/jitsched";
 	char buf[512];
 	FILE *fp;
 	int ret;
@@ -41,6 +41,7 @@ static int test(const struct test *restrict t)
 		goto perr;
 	buf[sizeof(buf)-1] = '\0';
 	fprintf(stdout, "%s:\n%s\n", t->name, buf);
+	/* reset the wait ms */
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
@@ -62,19 +63,19 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name		= "busy wait with 1ms interval",
+			.name		= "scheduled wait with 1ms interval",
 			.wait_ms	= 1,
 		},
 		{
-			.name		= "busy wait with 2ms interval",
+			.name		= "scheduled wait with 2ms interval",
 			.wait_ms	= 2,
 		},
 		{
-			.name		= "busy wait with 4ms interval",
+			.name		= "scheduled wait with 4ms interval",
 			.wait_ms	= 4,
 		},
 		{
-			.name		= "busy wait with 8ms interval",
+			.name		= "scheduled wait with 8ms interval",
 			.wait_ms	= 8,
 		},
 		{.name = NULL},

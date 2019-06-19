@@ -9,10 +9,9 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#include <linux/jiffies.h>
-#include <asm/processor.h>
+#include <linux/sched.h>
 
-static struct jitbusy_driver {
+static struct jitsched_driver {
 	struct mutex		lock;
 	unsigned int		default_wait_ms;
 	unsigned int		wait_ms;
@@ -22,16 +21,16 @@ static struct jitbusy_driver {
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
-} jitbusy_driver = {
+} jitsched_driver = {
 	.default_wait_ms	= 1000,	/* 1 sec */
-	.wait_max_nr		= 12,	/* 12 max waits */
+	.wait_max_nr		= 12,	/* 12 max sched waits */
 	.top			= NULL,
-	.name			= "jitbusy",
+	.name			= "jitsched",
 };
 
 static void *start(struct seq_file *m, loff_t *pos)
 {
-	struct jitbusy_driver *drv = PDE_DATA(file_inode(m->file));
+	struct jitsched_driver *drv = PDE_DATA(file_inode(m->file));
 	if (*pos >= drv->wait_max_nr)
 		return NULL;
 	seq_printf(m, "%9s %9s\n", "start", "end");
@@ -45,7 +44,7 @@ static void stop(struct seq_file *m, void *v)
 
 static void *next(struct seq_file *m, void *v, loff_t *pos)
 {
-	struct jitbusy_driver *drv = v;
+	struct jitsched_driver *drv = v;
 	if (++(*pos) >= drv->wait_max_nr)
 		return NULL;
 	return v;
@@ -53,11 +52,11 @@ static void *next(struct seq_file *m, void *v, loff_t *pos)
 
 static int show(struct seq_file *m, void *v)
 {
-	struct jitbusy_driver *drv = v;
+	struct jitsched_driver *drv = v;
 	unsigned long start = jiffies;
 	unsigned long end = start+HZ*drv->wait_ms/MSEC_PER_SEC;
 	while (time_before(jiffies, end))
-		cpu_relax();
+		schedule();
 	seq_printf(m, "%9ld %9ld\n", start&0xffffffff, jiffies&0xffffffff);
 	return 0;
 }
@@ -65,8 +64,7 @@ static int show(struct seq_file *m, void *v)
 static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 		     loff_t *pos)
 {
-	/* fp->private_data is used by sequence operations */
-	struct jitbusy_driver *drv = PDE_DATA(file_inode(fp));
+	struct jitsched_driver *drv = PDE_DATA(file_inode(fp));
 	long ms;
 	int ret;
 
@@ -96,17 +94,17 @@ out:
 
 static int open(struct inode *ip, struct file *fp)
 {
-	struct jitbusy_driver *drv = PDE_DATA(ip);
+	struct jitsched_driver *drv = PDE_DATA(ip);
 	return seq_open(fp, drv->sops);
 }
 
 static int __init init(void)
 {
-	struct jitbusy_driver *drv = &jitbusy_driver;
+	struct jitsched_driver *drv = &jitsched_driver;
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
 	struct proc_dir_entry *top;
-	char path[15]; /* strlen("driver/")+strlen(drv->name)+1 */
+	char path[16]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
 	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
@@ -133,11 +131,11 @@ module_init(init);
 
 static void __exit term(void)
 {
-	struct jitbusy_driver *drv = &jitbusy_driver;
+	struct jitsched_driver *drv = &jitsched_driver;
 	proc_remove(drv->top);
 }
 module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Just In Time busy wait module");
+MODULE_DESCRIPTION("Just In Time scheduled wait module");
