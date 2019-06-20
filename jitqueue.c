@@ -13,12 +13,11 @@
 #include <linux/time64.h>
 #include <linux/jiffies.h>
 #include <linux/wait.h>
-#include <asm/page.h>
 
 struct jitqueue_driver {
 	struct mutex		lock;
 	unsigned int		delay_ms;
-	char			buf[PAGE_SIZE];
+	char			buf[NAME_MAX];
 	struct proc_dir_entry	*proc;
 	const unsigned int	max_retry;
 	const unsigned int	default_delay_ms;

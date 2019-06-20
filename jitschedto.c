@@ -13,12 +13,11 @@
 #include <linux/time64.h>
 #include <linux/jiffies.h>
 #include <linux/sched.h>
-#include <asm/page.h>
 
 static struct jitschedto_driver {
 	struct mutex		lock;
 	unsigned long		delay_ms;
-	char			buf[PAGE_SIZE];
+	char			buf[NAME_MAX];
 	struct proc_dir_entry	*proc;
 	const unsigned int	max_retry;
 	const unsigned long	default_delay_ms;
