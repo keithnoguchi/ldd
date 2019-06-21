@@ -43,6 +43,18 @@ int main(void)
 			.name		= "kernel timer based 1ms delay",
 			.delay_ms	= 1,
 		},
+		{
+			.name		= "kernel timer based 2ms delay",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "kernel timer based 4ms delay",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "kernel timer based 8ms delay",
+			.delay_ms	= 8,
+		},
 		{.name = NULL},
 	};
 

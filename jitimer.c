@@ -6,10 +6,17 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#include <linux/uaccess.h>
+#include <linux/slab.h>
+#include <linux/wait.h>
 #include <linux/param.h>
 #include <linux/time.h>
 #include <linux/timer.h>
+
+struct jitimer_context {
+	wait_queue_head_t	wq;
+	int			done;
+	struct timer_list	t;
+};
 
 static struct jitimer_driver {
 	unsigned long		delay;
@@ -24,12 +31,38 @@ static struct jitimer_driver {
 	.name			= "jitimer",
 };
 
+static void timer(struct timer_list *t)
+{
+	struct jitimer_context *ctx = container_of(t, struct jitimer_context, t);
+	printk(KERN_DEBUG "hello from timer handler\n");
+	ctx->done = 1;
+	wake_up_interruptible(&ctx->wq);
+}
+
 static int show(struct seq_file *m, void *v)
 {
 	struct jitimer_driver *drv = m->private;
-	printk(KERN_DEBUG "hello from %s\n", drv->name);
-	seq_printf(m, "hello from %s\n", drv->name);
-	return 0;
+	struct jitimer_context *ctx;
+	int ret;
+
+	ctx = kzalloc(sizeof(struct jitimer_context), GFP_KERNEL);
+	if (IS_ERR(ctx))
+		return PTR_ERR(ctx);
+	printk(KERN_DEBUG "prepare timer\n");
+	init_waitqueue_head(&ctx->wq);
+	timer_setup(&ctx->t, timer, 0);
+	ctx->t.expires = jiffies + drv->delay;
+	add_timer(&ctx->t);
+	if (wait_event_interruptible(ctx->wq, ctx->done)) {
+		ret = -ERESTARTSYS;
+		goto out;
+	}
+	printk(KERN_DEBUG "finish timer\n");
+	ret = 0;
+out:
+	del_timer_sync(&ctx->t);
+	kfree(ctx);
+	return ret;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
