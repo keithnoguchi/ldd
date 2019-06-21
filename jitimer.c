@@ -5,22 +5,17 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
+#include <linux/seq_file.h>
 #include <linux/uaccess.h>
-#include <linux/wait.h>
 #include <linux/param.h>
 #include <linux/time.h>
 #include <linux/timer.h>
 
-struct jitimer_context {
-	wait_queue_head_t		wq;
-	const struct jitimer_driver	*drv;
-};
-
 static struct jitimer_driver {
-	unsigned int		retry_nr;
 	unsigned long		delay;
 	struct proc_dir_entry	*proc;
 	const char		*const name;
+	const unsigned int	retry_nr;
 	const unsigned int	default_delay_ms;
 	struct file_operations	fops[1];
 } jitimer_driver = {
@@ -29,10 +24,11 @@ static struct jitimer_driver {
 	.name			= "jitimer",
 };
 
-static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
+static int show(struct seq_file *m, void *v)
 {
-	struct jitimer_context ctx = {.drv = fp->private_data};
-	init_waitqueue_head(&ctx.wq);
+	struct jitimer_driver *drv = m->private;
+	printk(KERN_DEBUG "hello from %s\n", drv->name);
+	seq_printf(m, "hello from %s\n", drv->name);
 	return 0;
 }
 
@@ -44,8 +40,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 static int open(struct inode *ip, struct file *fp)
 {
 	struct jitimer_driver *drv = PDE_DATA(ip);
-	fp->private_data = drv;
-	return 0;
+	return single_open(fp, show, drv);
 }
 
 static int __init init(void)
@@ -60,9 +55,10 @@ static int __init init(void)
 	if (err < 0)
 		return err;
 	fops->owner	= THIS_MODULE;
-	fops->read	= read;
+	fops->read	= seq_read;
 	fops->write	= write;
 	fops->open	= open;
+	fops->release	= single_release;
 	proc = proc_create_data(name, S_IRUGO|S_IWUSR, NULL, fops, drv);
 	if (IS_ERR(proc))
 		return PTR_ERR(proc);
