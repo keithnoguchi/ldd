@@ -78,6 +78,8 @@
   - [jitqueue_test.c]: [jitqueue.c] self test
 - [jitschedto.c]: schedule_timeout() based delay module
   - [jitschedto_test.c]: [jitschedto.c] self test
+- [jitimer.c]: Kernel timer based delay module
+  - [jitimer_test.c]: [jitimer.c] self test
 
 [hz.c]: hz.c
 [jiffies.c]: jiffies.c
@@ -85,12 +87,14 @@
 [jitsched.c]: jitsched.c
 [jitqueue.c]: jitqueue.c
 [jitschedto.c]: jitschedto.c
+[jitimer.c]: jitimer.c
 [hz_test.c]: tests/hz_test.c
 [jiffies_test.c]: tests/jiffies_test.c
 [jitbusy_test.c]: tests/jitbusy_test.c
 [jitsched_test.c]: tests/jitsched_test.c
 [jitqueue_test.c]: tests/jitqueue_test.c
 [jitschedto_test.c]: tests/jitschedto_test.c
+[jitimer_test.c]: tests/jitimer_test.c
 
 ## Build
 

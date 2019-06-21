@@ -28,6 +28,7 @@ MODS  += jitbusy
 MODS  += jitsched
 MODS  += jitqueue
 MODS  += jitschedto
+MODS  += jitimer
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
