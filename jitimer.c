@@ -16,8 +16,11 @@
 #include <linux/sched.h>
 
 struct jitimer_context {
+	unsigned int		retry_nr;
+	unsigned long		prev_jiffies;
+	struct seq_file		*m;
+	struct jitimer_driver	*drv;
 	wait_queue_head_t	wq;
-	int			done;
 	struct timer_list	t;
 };
 
@@ -37,15 +40,22 @@ static struct jitimer_driver {
 static void timer(struct timer_list *t)
 {
 	struct jitimer_context *ctx = container_of(t, struct jitimer_context, t);
-	printk(KERN_DEBUG "hello from timer handler\n");
-	ctx->done = 1;
-	wake_up_interruptible(&ctx->wq);
+	struct jitimer_driver *drv = ctx->drv;
+	unsigned long now = jiffies;
+	seq_printf(ctx->m, "%8ld %6ld %6ld %9d %9d %3d %-32s\n",
+		   now&0xffffffff, drv->delay, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(), current->comm);
+	if (--ctx->retry_nr)
+		mod_timer(&ctx->t, now + drv->delay);
+	else
+		wake_up_interruptible(&ctx->wq);
 }
 
 static int show(struct seq_file *m, void *v)
 {
 	struct jitimer_driver *drv = m->private;
 	struct jitimer_context *ctx;
+	unsigned long now = jiffies;
 	int ret;
 
 	ctx = kzalloc(sizeof(struct jitimer_context), GFP_KERNEL);
@@ -53,18 +63,21 @@ static int show(struct seq_file *m, void *v)
 		return PTR_ERR(ctx);
 	init_waitqueue_head(&ctx->wq);
 	timer_setup(&ctx->t, timer, 0);
-	ctx->t.expires = jiffies + drv->delay;
+	ctx->prev_jiffies	= now;
+	ctx->t.expires		= now + drv->delay;
+	ctx->retry_nr		= drv->retry_nr;
+	ctx->drv		= drv;
+	ctx->m			= m;
+	seq_printf(m, "%8s %6s %6s %9s %9s %3s %-32s\n",
+		   "time", "delta", "inirq", "inatomic", "pid", "cpu", "cmd");
+	seq_printf(m, "%8ld %6d %6ld %9d %9d %3d %-32s\n",
+		   now&0xffffffff, 0, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(), current->comm);
 	add_timer(&ctx->t);
-	if (wait_event_interruptible(ctx->wq, ctx->done)) {
+	if (wait_event_interruptible(ctx->wq, !ctx->retry_nr)) {
 		ret = -ERESTARTSYS;
 		goto out;
 	}
-	seq_printf(m, "%8s %6s %6s %9s %9s %3s %-32s\n",
-		   "time", "delta", "inirq", "inatomic",
-		   "pid", "cpu", "cmd");
-	seq_printf(m, "%8ld %6d %6ld %9d %9d %3d %-32s\n",
-		   jiffies&0xffffffff, 0, in_interrupt(), in_atomic(),
-		   task_pid_nr(current), smp_processor_id(), current->comm);
 	ret = 0;
 out:
 	del_timer_sync(&ctx->t);
