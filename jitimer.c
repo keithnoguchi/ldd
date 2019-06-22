@@ -11,6 +11,9 @@
 #include <linux/param.h>
 #include <linux/time.h>
 #include <linux/timer.h>
+#include <linux/preempt.h>
+#include <linux/smp.h>
+#include <linux/sched.h>
 
 struct jitimer_context {
 	wait_queue_head_t	wq;
@@ -48,7 +51,6 @@ static int show(struct seq_file *m, void *v)
 	ctx = kzalloc(sizeof(struct jitimer_context), GFP_KERNEL);
 	if (IS_ERR(ctx))
 		return PTR_ERR(ctx);
-	printk(KERN_DEBUG "prepare timer\n");
 	init_waitqueue_head(&ctx->wq);
 	timer_setup(&ctx->t, timer, 0);
 	ctx->t.expires = jiffies + drv->delay;
@@ -57,7 +59,12 @@ static int show(struct seq_file *m, void *v)
 		ret = -ERESTARTSYS;
 		goto out;
 	}
-	printk(KERN_DEBUG "finish timer\n");
+	seq_printf(m, "%8s %6s %6s %9s %9s %3s %-32s\n",
+		   "time", "delta", "inirq", "inatomic",
+		   "pid", "cpu", "cmd");
+	seq_printf(m, "%8ld %6d %6ld %9d %9d %3d %-32s\n",
+		   jiffies&0xffffffff, 0, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(), current->comm);
 	ret = 0;
 out:
 	del_timer_sync(&ctx->t);
