@@ -3,10 +3,12 @@
 #include <linux/types.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/limits.h>
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 #include <linux/wait.h>
 #include <linux/param.h>
 #include <linux/time.h>
@@ -42,13 +44,17 @@ static void timer(struct timer_list *t)
 	struct jitimer_context *ctx = container_of(t, struct jitimer_context, t);
 	struct jitimer_driver *drv = ctx->drv;
 	unsigned long now = jiffies;
+
 	seq_printf(ctx->m, "%8ld %6ld %6ld %9d %9d %3d %-32s\n",
-		   now&0xffffffff, drv->delay, in_interrupt(), in_atomic(),
+		   now&0xffffffff, (long)(now - ctx->prev_jiffies),
+		   in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
-	if (--ctx->retry_nr)
-		mod_timer(&ctx->t, now + drv->delay);
-	else
+	if (!--ctx->retry_nr) {
 		wake_up_interruptible(&ctx->wq);
+		return;
+	}
+	ctx->prev_jiffies = now;
+	mod_timer(&ctx->t, now + drv->delay);
 }
 
 static int show(struct seq_file *m, void *v)
@@ -87,6 +93,21 @@ out:
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
+	struct jitimer_driver *drv = PDE_DATA(file_inode(fp));
+	char val[80];
+	long ms;
+	int ret;
+
+	if (copy_from_user(val, buf, sizeof(val)))
+		return -EFAULT;
+	ret = kstrtol(val, 10, &ms);
+	if (ret)
+		return ret;
+	if (ms < 0 || ms > MSEC_PER_SEC)
+		return -EINVAL;
+	if (!ms)
+		drv->delay = drv->default_delay_ms;
+	drv->delay = HZ*ms/MSEC_PER_SEC;
 	return count;
 }
 

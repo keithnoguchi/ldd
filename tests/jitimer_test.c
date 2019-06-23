@@ -20,6 +20,17 @@ static void test(const struct test *restrict t)
 	FILE *fp;
 	int ret;
 
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->delay_ms);
+	if (ret < 0)
+		goto perr;
+	ret = fwrite(buf, strlen(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
 	fp = fopen(path, "r");
 	if (!fp)
 		goto perr;
@@ -30,6 +41,14 @@ static void test(const struct test *restrict t)
 		goto perr;
 	buf[strlen(buf)-1] = '\0';
 	fprintf(stdout, "%s:\n%s\n", t->name, buf);
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = fputs("0\n", fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -54,6 +73,22 @@ int main(void)
 		{
 			.name		= "kernel timer based 8ms delay",
 			.delay_ms	= 8,
+		},
+		{
+			.name		= "kernel timer based 16ms delay",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "kernel timer based 32ms delay",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "kernel timer based 64ms delay",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "kernel timer based 128ms delay",
+			.delay_ms	= 128,
 		},
 		{.name = NULL},
 	};
