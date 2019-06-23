@@ -45,7 +45,7 @@ static void timer(struct timer_list *t)
 	struct jitimer_driver *drv = ctx->drv;
 	unsigned long now = jiffies;
 
-	seq_printf(ctx->m, "%8ld %6ld %6ld %9d %9d %3d %-32s\n",
+	seq_printf(ctx->m, "%10ld %6ld %6ld %9d %9d %3d %-30s\n",
 		   now&0xffffffff, (long)(now - ctx->prev_jiffies),
 		   in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
@@ -74,9 +74,9 @@ static int show(struct seq_file *m, void *v)
 	ctx->retry_nr		= drv->retry_nr;
 	ctx->drv		= drv;
 	ctx->m			= m;
-	seq_printf(m, "%8s %6s %6s %9s %9s %3s %-32s\n",
+	seq_printf(m, "%10s %6s %6s %9s %9s %3s %-30s\n",
 		   "time", "delta", "inirq", "inatomic", "pid", "cpu", "cmd");
-	seq_printf(m, "%8ld %6d %6ld %9d %9d %3d %-32s\n",
+	seq_printf(m, "%10ld %6d %6ld %9d %9d %3d %-30s\n",
 		   now&0xffffffff, 0, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
 	add_timer(&ctx->t);
