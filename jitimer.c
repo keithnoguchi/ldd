@@ -106,7 +106,7 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff
 	if (ms < 0 || ms > MSEC_PER_SEC)
 		return -EINVAL;
 	if (!ms)
-		drv->delay = drv->default_delay_ms;
+		ms = drv->default_delay_ms;
 	drv->delay = HZ*ms/MSEC_PER_SEC;
 	return count;
 }
