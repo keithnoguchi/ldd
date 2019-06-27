@@ -154,4 +154,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Just In Timer module");
+MODULE_DESCRIPTION("Just In Time kernel timer based delay example module");
