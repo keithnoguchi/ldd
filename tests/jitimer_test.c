@@ -23,7 +23,7 @@ static void test(const struct test *restrict t)
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
-	ret = snprintf(buf, sizeof(buf), "%ld\n", t->delay_ms);
+	ret = snprintf(buf, sizeof(buf), "%d\n", t->delay_ms);
 	if (ret < 0)
 		goto perr;
 	ret = fwrite(buf, strlen(buf), 1, fp);
@@ -39,8 +39,6 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
-	buf[strlen(buf)-1] = '\0';
-	fprintf(stdout, "%s:\n%s\n", t->name, buf);
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
@@ -49,6 +47,7 @@ static void test(const struct test *restrict t)
 		goto perr;
 	if (fclose(fp) == -1)
 		goto perr;
+	fprintf(stdout, "%s:\n%s\n", t->name, buf);
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);

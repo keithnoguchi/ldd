@@ -24,6 +24,9 @@ static void test(const struct test *restrict t)
 	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->path);
 	if (ret < 0)
 		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%d\n", t->delay_ms);
+	if (ret < 0)
+		goto perr;
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
