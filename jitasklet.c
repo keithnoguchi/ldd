@@ -6,8 +6,10 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/smp.h>
 #include <linux/slab.h>
 #include <linux/time.h>
+#include <linux/sched.h>
 #include <linux/atomic.h>
 #include <linux/jiffies.h>
 #include <linux/completion.h>
@@ -57,13 +59,17 @@ static void tasklet(unsigned long arg)
 	if (unlikely(ctx->expire))
 		if (time_before(now, ctx->expire))
 			goto again;
+	seq_printf(ctx->m, "%10ld %6ld %6ld %9d %9d %3d %-30s\n",
+		   now&0xffffffff, (long)(now-ctx->prev_jiffies),
+		   in_interrupt(), in_atomic(), task_pid_nr(current),
+		   smp_processor_id(), current->comm);
 	if (atomic_dec_return(&ctx->retry_nr) < 0) {
 		complete(&ctx->done);
 		return;
 	}
 	ctx->prev_jiffies	= now;
 	if (unlikely(ctx->expire))
-		ctx->expire	= now+drv->delay;
+		ctx->expire	= now + drv->delay;
 again:
 	(*drv->schedule)(&ctx->base);
 }
@@ -85,8 +91,12 @@ static int show(struct seq_file *m, void *v)
 	ctx->drv		= drv;
 	ctx->prev_jiffies	= now;
 	if (unlikely(drv->delay))
-		ctx->expire	= now+drv->delay;
-	seq_printf(ctx->m, "schedule\n");
+		ctx->expire	= now + drv->delay;
+	seq_printf(ctx->m, "%10s %6s %6s %9s %9s %3s %-30s\n",
+		   "time", "delta", "inirq", "inatomic", "pid", "cpu", "cmd");
+	seq_printf(ctx->m, "%10ld %6d %6ld %9d %9d %3d %-30s\n",
+		   now&0xffffffff, 0, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(), current->comm);
 	(*drv->schedule)(&ctx->base);
 	if (wait_for_completion_interruptible(&ctx->done)) {
 		ret = -ERESTARTSYS;
@@ -96,7 +106,6 @@ static int show(struct seq_file *m, void *v)
 done:
 	atomic_set(&ctx->retry_nr, 0);
 	tasklet_kill(&ctx->base);
-	seq_printf(ctx->m, "done\n");
 	kfree(ctx);
 	return ret;
 }
