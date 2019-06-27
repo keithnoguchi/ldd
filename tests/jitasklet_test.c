@@ -10,16 +10,134 @@
 
 struct test {
 	const char	*const name;
+	const char	*const path;
+	unsigned int	delay_ms;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
+	FILE *fp;
+	int ret;
+
+	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->path);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = fwrite(buf, strlen(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = fputs("0\n", fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fprintf(stdout, "%s:\n%s", t->name, buf);
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name		= "tasklet based 1ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "tasklet based 2ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "tasklet based 4ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "tasklet based 8ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "tasklet based 16ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "tasklet based 32ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "tasklet based 64ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "tasklet based 128ms delay",
+			.path		= "jitasklet",
+			.delay_ms	= 128,
+		},
+		{
+			.name		= "hi tasklet based 1ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "hi tasklet based 2ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "hi tasklet based 4ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "hi tasklet based 8ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "hi tasklet based 16ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "hi tasklet based 32ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "hi tasklet based 64ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "hi tasklet based 128ms delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 128,
+		},
 		{.name = NULL},
 	};
 
