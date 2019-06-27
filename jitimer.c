@@ -9,7 +9,8 @@
 #include <linux/seq_file.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
-#include <linux/wait.h>
+#include <linux/atomic.h>
+#include <linux/completion.h>
 #include <linux/param.h>
 #include <linux/time.h>
 #include <linux/timer.h>
@@ -18,11 +19,11 @@
 #include <linux/sched.h>
 
 struct jitimer_context {
-	unsigned int		retry_nr;
+	atomic_t		retry_nr;
 	unsigned long		prev_jiffies;
 	struct seq_file		*m;
 	struct jitimer_driver	*drv;
-	wait_queue_head_t	wq;
+	struct completion	done;
 	struct timer_list	t;
 };
 
@@ -30,11 +31,11 @@ static struct jitimer_driver {
 	unsigned long		delay;
 	struct proc_dir_entry	*proc;
 	const char		*const name;
-	const unsigned int	retry_nr;
+	const unsigned int	default_retry_nr;
 	const unsigned int	default_delay_ms;
 	struct file_operations	fops[1];
 } jitimer_driver = {
-	.retry_nr		= 5,	/* 5 retry */
+	.default_retry_nr	= 5,	/* 5 retry */
 	.default_delay_ms	= 10,	/* 10ms */
 	.name			= "jitimer",
 };
@@ -49,8 +50,8 @@ static void timer(struct timer_list *t)
 		   now&0xffffffff, (long)(now - ctx->prev_jiffies),
 		   in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
-	if (!--ctx->retry_nr) {
-		wake_up_interruptible(&ctx->wq);
+	if (atomic_dec_return(&ctx->retry_nr) < 0) {
+		complete(&ctx->done);
 		return;
 	}
 	ctx->prev_jiffies = now;
@@ -67,11 +68,11 @@ static int show(struct seq_file *m, void *v)
 	ctx = kzalloc(sizeof(struct jitimer_context), GFP_KERNEL);
 	if (IS_ERR(ctx))
 		return PTR_ERR(ctx);
-	init_waitqueue_head(&ctx->wq);
+	init_completion(&ctx->done);
 	timer_setup(&ctx->t, timer, 0);
+	atomic_set(&ctx->retry_nr, drv->default_retry_nr);
 	ctx->prev_jiffies	= now;
 	ctx->t.expires		= now + drv->delay;
-	ctx->retry_nr		= drv->retry_nr;
 	ctx->drv		= drv;
 	ctx->m			= m;
 	seq_printf(m, "%10s %6s %6s %9s %9s %3s %-30s\n",
@@ -80,12 +81,14 @@ static int show(struct seq_file *m, void *v)
 		   now&0xffffffff, 0, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
 	add_timer(&ctx->t);
-	if (wait_event_interruptible(ctx->wq, !ctx->retry_nr)) {
+	if (wait_for_completion_interruptible(&ctx->done)) {
 		ret = -ERESTARTSYS;
 		goto out;
 	}
 	ret = 0;
 out:
+	/* to avoid the delay in case of the wait interrupt */
+	atomic_set(&ctx->retry_nr, 0);
 	del_timer_sync(&ctx->t);
 	kfree(ctx);
 	return ret;
