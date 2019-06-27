@@ -6,25 +6,99 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/slab.h>
+#include <linux/time.h>
+#include <linux/atomic.h>
+#include <linux/jiffies.h>
+#include <linux/completion.h>
+#include <linux/interrupt.h>
+
+struct jitasklet_context {
+	atomic_t		retry_nr;
+	unsigned long		prev_jiffies;
+	unsigned long		expire;
+	struct seq_file		*m;
+	struct jitasklet_driver	*drv;
+	struct completion	done;
+	struct tasklet_struct	base;
+};
 
 static struct jitasklet_driver {
+	unsigned long		delay;		/* in jiffies */
+	const unsigned int	default_retry_nr;
+	const unsigned int	default_delay_ms;
 	struct proc_dir_entry	*proc;
 	struct file_operations	fops;
+	void			(*schedule)(struct tasklet_struct *t);
 	const char		*const name;
 } jitasklet_drivers[] = {
 	{
-		.proc	= NULL,
-		.name	= "jitasklet",
+		.default_retry_nr	= 5,	/* 5 retry */
+		.default_delay_ms	= 0,	/* no delay */
+		.proc			= NULL,
+		.schedule		= tasklet_schedule,
+		.name			= "jitasklet",
 	},
 	{
-		.proc	= NULL,
-		.name	= "jitasklethi",
+		.default_retry_nr	= 5,	/* 5 retry */
+		.default_delay_ms	= 0,	/* no delay */
+		.proc			= NULL,
+		.schedule		= tasklet_hi_schedule,
+		.name			= "jitasklethi",
 	},
 };
 
+static void tasklet(unsigned long arg)
+{
+	struct jitasklet_context *ctx = (struct jitasklet_context *)arg;
+	struct jitasklet_driver *drv = ctx->drv;
+	unsigned long now = jiffies;
+
+	if (unlikely(ctx->expire))
+		if (time_before(now, ctx->expire))
+			goto again;
+	if (atomic_dec_return(&ctx->retry_nr) < 0) {
+		complete(&ctx->done);
+		return;
+	}
+	ctx->prev_jiffies	= now;
+	if (unlikely(ctx->expire))
+		ctx->expire	= now+drv->delay;
+again:
+	(*drv->schedule)(&ctx->base);
+}
+
 static int show(struct seq_file *m, void *v)
 {
-	return 0;
+	struct jitasklet_driver *drv = m->private;
+	unsigned long now = jiffies;
+	struct jitasklet_context *ctx;
+	int ret;
+
+	ctx = kzalloc(sizeof(struct jitasklet_context), GFP_KERNEL);
+	if (IS_ERR(ctx))
+		return PTR_ERR(ctx);
+	init_completion(&ctx->done);
+	tasklet_init(&ctx->base, tasklet, (unsigned long)ctx);
+	atomic_set(&ctx->retry_nr, drv->default_retry_nr);
+	ctx->m			= m;
+	ctx->drv		= drv;
+	ctx->prev_jiffies	= now;
+	if (unlikely(drv->delay))
+		ctx->expire	= now+drv->delay;
+	seq_printf(ctx->m, "schedule\n");
+	(*drv->schedule)(&ctx->base);
+	if (wait_for_completion_interruptible(&ctx->done)) {
+		ret = -ERESTARTSYS;
+		goto done;
+	}
+	ret = 0;
+done:
+	atomic_set(&ctx->retry_nr, 0);
+	tasklet_kill(&ctx->base);
+	seq_printf(ctx->m, "done\n");
+	kfree(ctx);
+	return ret;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
@@ -38,54 +112,35 @@ static int open(struct inode *ip, struct file *fp)
 	return single_open(fp, show, drv);
 }
 
-static int showhi(struct seq_file *m, void *v)
-{
-	return 0;
-}
-
-static int openhi(struct inode *ip, struct file *fp)
-{
-	struct jitasklet_driver *drv = PDE_DATA(ip);
-	return single_open(fp, showhi, drv);
-}
-
 static int __init init(void)
 {
 	struct jitasklet_driver *drv = jitasklet_drivers;
 	struct jitasklet_driver *end = drv+ARRAY_SIZE(jitasklet_drivers);
-	struct file_operations *fops;
 	char name[20]; /* strlen("driver/")+strlen(drv[1]->name)+1 */
 	int err;
 
-	/* standard tasklet file operations */
-	fops		= &drv[0].fops;
-	fops->owner	= THIS_MODULE;
-	fops->read	= seq_read;
-	fops->write	= write;
-	fops->open	= open;
-	fops->release	= seq_release;
-	/* high priority tasklet file operations */
-	fops		= &drv[1].fops;
-	fops->owner	= THIS_MODULE;
-	fops->read	= seq_read;
-	fops->write	= write;
-	fops->open	= openhi;
-	fops->release	= seq_release;
 	for (drv = jitasklet_drivers; drv != end; drv++) {
+		struct file_operations *fops;
 		struct proc_dir_entry *proc;
-
 		err = snprintf(name, sizeof(name), "driver/%s", drv->name);
 		if (err < 0) {
 			end = drv;
 			goto err;
 		}
+		fops		= &drv->fops;
+		fops->owner	= THIS_MODULE;
+		fops->read	= seq_read;
+		fops->write	= write;
+		fops->open	= open;
+		fops->release	= seq_release;
 		proc = proc_create_data(name, S_IWUSR|S_IRUGO, NULL, fops, drv);
 		if (IS_ERR(proc)) {
 			err = PTR_ERR(proc);
 			end = drv;
 			goto err;
 		}
-		drv->proc = proc;
+		drv->proc	= proc;
+		drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 	}
 	return 0;
 err:

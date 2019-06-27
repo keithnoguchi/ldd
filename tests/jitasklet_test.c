@@ -62,6 +62,11 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
+			.name		= "tasklet based minimum delay",
+			.path		= "jitasklet",
+			.delay_ms	= 0,
+		},
+		{
 			.name		= "tasklet based 1ms delay",
 			.path		= "jitasklet",
 			.delay_ms	= 1,
@@ -100,6 +105,11 @@ int main(void)
 			.name		= "tasklet based 128ms delay",
 			.path		= "jitasklet",
 			.delay_ms	= 128,
+		},
+		{
+			.name		= "hi tasklet based minimum delay",
+			.path		= "jitasklethi",
+			.delay_ms	= 0,
 		},
 		{
 			.name		= "hi tasklet based 1ms delay",
