@@ -108,7 +108,7 @@ int main(void)
 		},
 		{
 			.name		= "delay work queue based minimum delay",
-			.path		= "jiwq",
+			.path		= "jiwqdelay",
 			.delay_ms	= 0,
 		},
 		{
@@ -149,6 +149,96 @@ int main(void)
 		{
 			.name		= "delay work queue based 128ms delay",
 			.path		= "jiwqdelay",
+			.delay_ms	= 128,
+		},
+		{
+			.name		= "single work queue based minimum delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 0,
+		},
+		{
+			.name		= "single work queue based 1ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "single work queue based 2ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "single work queue based 4ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "single work queue based 8ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "single work queue based 16ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "single work queue based 32ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "single work queue based 64ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "single work queue based 128ms delay",
+			.path		= "jiwqsingle",
+			.delay_ms	= 128,
+		},
+		{
+			.name		= "delay single work queue based minimum delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 0,
+		},
+		{
+			.name		= "delay single work queue based 1ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "delay single work queue based 2ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "delay single work queue based 4ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "delay single work queue based 8ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "delay single work queue based 16ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "delay single work queue based 32ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "delay single work queue based 64ms delay",
+			.path		= "jiwqsingledelay",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "delay single work queue based 128ms delay",
+			.path		= "jiwqsingledelay",
 			.delay_ms	= 128,
 		},
 		{.name = NULL},

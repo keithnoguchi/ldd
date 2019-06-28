@@ -22,6 +22,14 @@ static struct jiwq_driver {
 		.proc	= NULL,
 		.name	= "jiwqdelay",
 	},
+	{
+		.proc	= NULL,
+		.name	= "jiwqsingle",
+	},
+	{
+		.proc	= NULL,
+		.name	= "jiwqsingledelay",
+	},
 };
 
 static int show(struct seq_file *m, void *v)
@@ -46,7 +54,7 @@ static int __init init(void)
 {
 	struct jiwq_driver *drv = jiwq_drivers;
 	struct jiwq_driver *end = drv+ARRAY_SIZE(jiwq_drivers);
-	char path[17]; /* strlen("driver/")+strlen(drv[1].name)+1 */
+	char path[23]; /* strlen("driver/")+strlen(drv[3].name)+1 */
 	int err;
 
 	for (drv = jiwq_drivers; drv != end; drv++) {
@@ -58,7 +66,10 @@ static int __init init(void)
 			end = drv;
 			goto err;
 		}
-		wq = create_workqueue(drv->name);
+		if (!strncmp(drv->name, "jiwqsingle", strlen("jiwqsingle")))
+			wq = create_singlethread_workqueue(drv->name);
+		else
+			wq = create_workqueue(drv->name);
 		if (IS_ERR(wq)) {
 			err = PTR_ERR(wq);
 			end = drv;
