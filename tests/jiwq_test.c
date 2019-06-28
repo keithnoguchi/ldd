@@ -10,16 +10,147 @@
 
 struct test {
 	const char	*const name;
+	const char	*const path;
+	unsigned int	delay_ms;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	char buf[BUFSIZ];
+	FILE *fp;
+	int ret;
+
+	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->path);
+	if (ret < 0)
+		goto perr;
+	ret = snprintf(buf, sizeof(buf), "%ld\n", t->delay_ms);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = fwrite(buf, strlen(buf), 1, fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fp = fopen(path, "w");
+	if (!fp)
+		goto perr;
+	ret = fputs("0\n", fp);
+	if (ret == -1)
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	fprintf(stdout, "%s:\n%s", t->name, buf);
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name		= "work queue based minimum delay",
+			.path		= "jiwq",
+			.delay_ms	= 0,
+		},
+		{
+			.name		= "work queue based 1ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "work queue based 2ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "work queue based 4ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "work queue based 8ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "work queue based 16ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "work queue based 32ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "work queue based 64ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "work queue based 128ms delay",
+			.path		= "jiwq",
+			.delay_ms	= 128,
+		},
+		{
+			.name		= "delay work queue based minimum delay",
+			.path		= "jiwq",
+			.delay_ms	= 0,
+		},
+		{
+			.name		= "delay work queue based 1ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "delay work queue based 2ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "delay work queue based 4ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "delay work queue based 8ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "delay work queue based 16ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 16,
+		},
+		{
+			.name		= "delay work queue based 32ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 32,
+		},
+		{
+			.name		= "delay work queue based 64ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 64,
+		},
+		{
+			.name		= "delay work queue based 128ms delay",
+			.path		= "jiwqdelay",
+			.delay_ms	= 128,
+		},
 		{.name = NULL},
 	};
 

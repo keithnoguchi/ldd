@@ -143,13 +143,13 @@ static int __init init(void)
 {
 	struct jitasklet_driver *drv = jitasklet_drivers;
 	struct jitasklet_driver *end = drv+ARRAY_SIZE(jitasklet_drivers);
-	char name[20]; /* strlen("driver/")+strlen(drv[1]->name)+1 */
+	char path[20]; /* strlen("driver/")+strlen(drv[1]->name)+1 */
 	int err;
 
 	for (drv = jitasklet_drivers; drv != end; drv++) {
 		struct file_operations *fops;
 		struct proc_dir_entry *proc;
-		err = snprintf(name, sizeof(name), "driver/%s", drv->name);
+		err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 		if (err < 0) {
 			end = drv;
 			goto err;
@@ -160,7 +160,7 @@ static int __init init(void)
 		fops->write	= write;
 		fops->open	= open;
 		fops->release	= seq_release;
-		proc = proc_create_data(name, S_IWUSR|S_IRUGO, NULL, fops, drv);
+		proc = proc_create_data(path, S_IWUSR|S_IRUGO, NULL, fops, drv);
 		if (IS_ERR(proc)) {
 			err = PTR_ERR(proc);
 			end = drv;
