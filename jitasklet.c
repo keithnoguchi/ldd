@@ -66,7 +66,7 @@ static void tasklet(unsigned long arg)
 		   now&0xffffffff, (long)(now-ctx->prev_jiffies),
 		   ctx->call_nr, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
-	if (atomic_dec_return(&ctx->retry_nr) < 0) {
+	if (atomic_dec_return(&ctx->retry_nr) <= 0) {
 		complete(&ctx->done);
 		return;
 	}
