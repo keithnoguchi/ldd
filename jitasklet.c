@@ -189,4 +189,4 @@ module_exit(term);
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kei Nohguchi <kei@nohguchi.com>");
-MODULE_DESCRIPTION("Just in Time tasklet based delay module");
+MODULE_DESCRIPTION("Just in Tasklet based delay module");

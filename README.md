@@ -82,6 +82,8 @@
   - [jitimer_test.c]: [jitimer.c] self test
 - [jitasklet.c]: Tasklet based delay module
   - [jitasklet_test.c]: [jitasklet.c] self test
+- [jiwq.c]: Work queue based delay module
+  - [jiwq_test.c]: [jiwq.c] self test
 
 [hz.c]: hz.c
 [jiffies.c]: jiffies.c
@@ -91,6 +93,7 @@
 [jitschedto.c]: jitschedto.c
 [jitimer.c]: jitimer.c
 [jitasklet.c]: jitasklet.c
+[jiwq.c]: jiwq.c
 [hz_test.c]: tests/hz_test.c
 [jiffies_test.c]: tests/jiffies_test.c
 [jitbusy_test.c]: tests/jitbusy_test.c
@@ -99,6 +102,7 @@
 [jitschedto_test.c]: tests/jitschedto_test.c
 [jitimer_test.c]: tests/jitimer_test.c
 [jitasklet_test.c]: tests/jitasklet_test.c
+[jiwq_test.c]: tests/jiwq_test.c
 
 ## Build
 
