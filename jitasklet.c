@@ -17,6 +17,7 @@
 #include <linux/interrupt.h>
 
 struct jitasklet_context {
+	unsigned long		call_nr;
 	atomic_t		retry_nr;
 	unsigned long		prev_jiffies;
 	unsigned long		expire;
@@ -57,17 +58,19 @@ static void tasklet(unsigned long arg)
 	struct jitasklet_driver *drv = ctx->drv;
 	unsigned long now = jiffies;
 
+	ctx->call_nr++;
 	if (unlikely(ctx->expire))
 		if (time_before(now, ctx->expire))
 			goto again;
-	seq_printf(ctx->m, "%10ld %6ld %6ld %9d %9d %3d %-30s\n",
+	seq_printf(ctx->m, "%10ld %6ld %8ld %6ld %9d %9d %3d %-s\n",
 		   now&0xffffffff, (long)(now-ctx->prev_jiffies),
-		   in_interrupt(), in_atomic(), task_pid_nr(current),
-		   smp_processor_id(), current->comm);
+		   ctx->call_nr, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(), current->comm);
 	if (atomic_dec_return(&ctx->retry_nr) < 0) {
 		complete(&ctx->done);
 		return;
 	}
+	ctx->call_nr		= 0;
 	ctx->prev_jiffies	= now;
 	if (unlikely(ctx->expire))
 		ctx->expire	= now + drv->delay;
@@ -93,10 +96,11 @@ static int show(struct seq_file *m, void *v)
 	ctx->prev_jiffies	= now;
 	if (unlikely(drv->delay))
 		ctx->expire	= now + drv->delay;
-	seq_printf(ctx->m, "%10s %6s %6s %9s %9s %3s %-30s\n",
-		   "time", "delta", "inirq", "inatomic", "pid", "cpu", "cmd");
-	seq_printf(ctx->m, "%10ld %6d %6ld %9d %9d %3d %-30s\n",
-		   now&0xffffffff, 0, in_interrupt(), in_atomic(),
+	seq_printf(ctx->m, "%10s %6s %8s %6s %9s %9s %3s %-s\n",
+		   "time", "delta", "call", "inirq", "inatomic",
+		   "pid", "cpu", "cmd");
+	seq_printf(ctx->m, "%10ld %6d %8d %6ld %9d %9d %3d %-s\n",
+		   now&0xffffffff, 0, 0, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
 	(*drv->schedule)(&ctx->base);
 	if (wait_for_completion_interruptible(&ctx->done)) {
