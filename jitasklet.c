@@ -62,7 +62,7 @@ static void tasklet(unsigned long arg)
 	if (unlikely(ctx->expire))
 		if (time_before(now, ctx->expire))
 			goto again;
-	seq_printf(ctx->m, "%10ld %6ld %8ld %6ld %9d %9d %3d %-s\n",
+	seq_printf(ctx->m, "%10ld %6ld %8ld %6ld %9d %9d %3d %-21s\n",
 		   now&0xffffffff, (long)(now-ctx->prev_jiffies),
 		   ctx->call_nr, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
@@ -96,10 +96,10 @@ static int show(struct seq_file *m, void *v)
 	ctx->prev_jiffies	= now;
 	if (unlikely(drv->delay))
 		ctx->expire	= now + drv->delay;
-	seq_printf(ctx->m, "%10s %6s %8s %6s %9s %9s %3s %-s\n",
+	seq_printf(ctx->m, "%10s %6s %8s %6s %9s %9s %3s %-21s\n",
 		   "time", "delta", "call", "inirq", "inatomic",
 		   "pid", "cpu", "cmd");
-	seq_printf(ctx->m, "%10ld %6d %8d %6ld %9d %9d %3d %-s\n",
+	seq_printf(ctx->m, "%10ld %6d %8d %6ld %9d %9d %3d %-21s\n",
 		   now&0xffffffff, 0, 0, in_interrupt(), in_atomic(),
 		   task_pid_nr(current), smp_processor_id(), current->comm);
 	(*drv->schedule)(&ctx->base);
