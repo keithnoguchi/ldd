@@ -6,6 +6,7 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/uaccess.h>
 #include <linux/smp.h>
 #include <linux/slab.h>
 #include <linux/time.h>
@@ -112,6 +113,19 @@ done:
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count, loff_t *pos)
 {
+	struct jitasklet_driver *drv = PDE_DATA(file_inode(fp));
+	char val[80];
+	long ms;
+	int err;
+
+	if (copy_from_user(val, buf, sizeof(val)))
+		return -EFAULT;
+	err = kstrtol(val, 10, &ms);
+	if (err)
+		return err;
+	if (ms < 0 || ms > MSEC_PER_SEC)
+		return -EINVAL;
+	drv->delay = HZ*ms/MSEC_PER_SEC;
 	return count;
 }
 
