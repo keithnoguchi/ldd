@@ -6,8 +6,10 @@
 #include <linux/fs.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/workqueue.h>
 
 static struct jiwq_driver {
+	struct workqueue_struct	*wq;
 	struct proc_dir_entry	*proc;
 	struct file_operations	fops;
 	const char		*const name;
@@ -24,6 +26,8 @@ static struct jiwq_driver {
 
 static int show(struct seq_file *m, void *v)
 {
+	struct jiwq_driver *drv = m->private;
+	seq_printf(m, "hello from %s\n", drv->name);
 	return 0;
 }
 
@@ -47,12 +51,20 @@ static int __init init(void)
 
 	for (drv = jiwq_drivers; drv != end; drv++) {
 		struct file_operations *fops;
+		struct workqueue_struct *wq;
 		struct proc_dir_entry *proc;
 		err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 		if (err < 0) {
 			end = drv;
 			goto err;
 		}
+		wq = create_workqueue(drv->name);
+		if (IS_ERR(wq)) {
+			err = PTR_ERR(wq);
+			end = drv;
+			goto err;
+		}
+		drv->wq		= wq;
 		fops		= &drv->fops;
 		fops->owner	= THIS_MODULE;
 		fops->read	= seq_read;
@@ -61,6 +73,7 @@ static int __init init(void)
 		fops->release	= seq_release;
 		proc = proc_create_data(path, S_IRUSR|S_IWUGO, NULL, fops, drv);
 		if (IS_ERR(proc)) {
+			destroy_workqueue(wq);
 			err = PTR_ERR(proc);
 			end = drv;
 			goto err;
@@ -69,8 +82,10 @@ static int __init init(void)
 	}
 	return 0;
 err:
-	for (drv = jiwq_drivers; drv != end; drv++)
+	for (drv = jiwq_drivers; drv != end; drv++) {
+		destroy_workqueue(drv->wq);
 		proc_remove(drv->proc);
+	}
 	return err;
 }
 module_init(init);
@@ -80,8 +95,10 @@ static void __exit term(void)
 	struct jiwq_driver *drv = jiwq_drivers;
 	struct jiwq_driver *end = drv+ARRAY_SIZE(jiwq_drivers);
 
-	for (drv = jiwq_drivers; drv != end; drv++)
+	for (drv = jiwq_drivers; drv != end; drv++) {
+		destroy_workqueue(drv->wq);
 		proc_remove(drv->proc);
+	}
 }
 module_exit(term);
 

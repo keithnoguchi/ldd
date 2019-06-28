@@ -154,6 +154,7 @@ static int __init init(void)
 			end = drv;
 			goto err;
 		}
+		drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 		fops		= &drv->fops;
 		fops->owner	= THIS_MODULE;
 		fops->read	= seq_read;
@@ -167,7 +168,6 @@ static int __init init(void)
 			goto err;
 		}
 		drv->proc	= proc;
-		drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 	}
 	return 0;
 err:

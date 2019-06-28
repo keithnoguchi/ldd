@@ -111,6 +111,7 @@ static int __init init(void)
 	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
+	drv->delay_ms	= drv->default_delay_ms;
 	sops->start	= start;
 	sops->stop	= stop;
 	sops->next	= next;
@@ -123,7 +124,6 @@ static int __init init(void)
 	proc = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
 	if (IS_ERR(proc))
 		return PTR_ERR(proc);
-	drv->delay_ms	= drv->default_delay_ms;
 	drv->proc	= proc;
 	return 0;
 }

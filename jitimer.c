@@ -131,6 +131,7 @@ static int __init init(void)
 	err = snprintf(name, sizeof(name), "driver/%s", drv->name);
 	if (err < 0)
 		return err;
+	drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 	fops->owner	= THIS_MODULE;
 	fops->read	= seq_read;
 	fops->write	= write;
@@ -139,7 +140,6 @@ static int __init init(void)
 	proc = proc_create_data(name, S_IRUGO|S_IWUSR, NULL, fops, drv);
 	if (IS_ERR(proc))
 		return PTR_ERR(proc);
-	drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 	drv->proc	= proc;
 	return 0;
 }
