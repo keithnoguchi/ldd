@@ -13,6 +13,7 @@
 #include <linux/sched.h>
 #include <linux/atomic.h>
 #include <linux/jiffies.h>
+#include <linux/preempt.h>
 #include <linux/completion.h>
 #include <linux/interrupt.h>
 
