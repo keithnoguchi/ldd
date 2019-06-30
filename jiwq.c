@@ -27,6 +27,10 @@ struct jiwq_context {
 };
 
 static struct jiwq_driver {
+	unsigned int		type;
+#define JIWQ_TYPE_DELAY		(1 << 0)
+#define JIWQ_TYPE_SINGLE	(1 << 1)
+#define JIWQ_TYPE_SHARED	(1 << 2)
 	unsigned long		delay;
 	const unsigned int	default_retry_nr;
 	const unsigned int	default_delay_ms;
@@ -39,36 +43,42 @@ static struct jiwq_driver {
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= 0,
 		.name			= "jiwq",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= JIWQ_TYPE_DELAY,
 		.name			= "jiwqdelay",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= JIWQ_TYPE_SINGLE,
 		.name			= "jisinglewq",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= JIWQ_TYPE_SINGLE|JIWQ_TYPE_DELAY,
 		.name			= "jisinglewqdelay",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= JIWQ_TYPE_SHARED,
 		.name			= "jisharedwq",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
 		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
+		.type			= JIWQ_TYPE_SHARED|JIWQ_TYPE_DELAY,
 		.name			= "jisharedwqdelay",
 	},
 };
@@ -183,9 +193,9 @@ static int __init init(void)
 			end = drv;
 			goto err;
 		}
-		if (!strncmp(drv->name, "jisharedwq", strlen("jisharedwq")))
+		if (drv->type & JIWQ_TYPE_SHARED)
 			wq = system_wq;
-		else if (!strncmp(drv->name, "jisinglewq", strlen("jisinglewq")))
+		else if (drv->type & JIWQ_TYPE_SINGLE)
 			wq = create_singlethread_workqueue(drv->name);
 		else
 			wq = create_workqueue(drv->name);
@@ -204,8 +214,8 @@ static int __init init(void)
 		fops->release	= seq_release;
 		proc = proc_create_data(path, S_IWUSR|S_IRUGO, NULL, fops, drv);
 		if (IS_ERR(proc)) {
-			if (drv->wq != system_wq);
-			destroy_workqueue(drv->wq);
+			if (!(drv->type & JIWQ_TYPE_SHARED))
+				destroy_workqueue(drv->wq);
 			err = PTR_ERR(proc);
 			end = drv;
 			goto err;
@@ -215,7 +225,7 @@ static int __init init(void)
 	return 0;
 err:
 	for (drv = jiwq_drivers; drv != end; drv++) {
-		if (drv->wq != system_wq)
+		if (!(drv->type & JIWQ_TYPE_SHARED))
 			destroy_workqueue(drv->wq);
 		proc_remove(drv->proc);
 	}
@@ -229,7 +239,7 @@ static void __exit term(void)
 	struct jiwq_driver *end = drv+ARRAY_SIZE(jiwq_drivers);
 
 	for (drv = jiwq_drivers; drv != end; drv++) {
-		if (drv->wq != system_wq)
+		if (!(drv->type & JIWQ_TYPE_SHARED))
 			destroy_workqueue(drv->wq);
 		proc_remove(drv->proc);
 	}
