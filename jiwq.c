@@ -14,8 +14,10 @@
 #include <linux/workqueue.h>
 
 struct jiwq_context {
+	unsigned long		call_nr;
 	atomic_t		retry_nr;
 	unsigned long		prev_jiffies;
+	unsigned long		expire;
 	struct seq_file		*m;
 	struct jiwq_driver	*drv;
 	struct completion	done;
@@ -23,7 +25,9 @@ struct jiwq_context {
 };
 
 static struct jiwq_driver {
+	unsigned long		delay;
 	const unsigned int	default_retry_nr;
+	const unsigned int	default_delay_ms;
 	struct workqueue_struct	*wq;
 	struct proc_dir_entry	*proc;
 	struct file_operations	fops;
@@ -31,21 +35,25 @@ static struct jiwq_driver {
 } jiwq_drivers[] = {
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
+		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
 		.name			= "jiwq",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
+		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
 		.name			= "jiwqdelay",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
+		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
 		.name			= "jiwqsingle",
 	},
 	{
 		.default_retry_nr	= 5,	/* 5 retries */
+		.default_delay_ms	= 0,	/* no delay */
 		.proc			= NULL,
 		.name			= "jiwqsingledelay",
 	},
@@ -56,12 +64,28 @@ static void work(struct work_struct *w)
 	struct jiwq_context *ctx = container_of(to_delayed_work(w),
 						struct jiwq_context,
 						base);
+	struct jiwq_driver *drv = ctx->drv;
 	unsigned long now = jiffies;
-	seq_printf(ctx->m, "%10ld %6ld %8d %6ld %9d %9d %3d %-21s\n",
-		   now&0xffffffff, (long)(now-ctx->prev_jiffies), 0,
-		   in_interrupt(), in_atomic(), task_pid_nr(current),
-		   smp_processor_id(), current->comm);
-	complete(&ctx->done);
+
+	ctx->call_nr++;
+	if (unlikely(ctx->expire))
+		if (likely(time_before(now, ctx->expire)))
+			goto again;
+	seq_printf(ctx->m, "%10ld %6ld %8ld %6ld %9d %9d %3d %-21s\n",
+		   now&0xffffffff, (long)(now-ctx->prev_jiffies),
+		   ctx->call_nr, in_interrupt(), in_atomic(),
+		   task_pid_nr(current), smp_processor_id(),
+		   current->comm);
+	ctx->call_nr		= 0;
+	ctx->prev_jiffies	= now;
+	if (unlikely(ctx->expire))
+		ctx->expire	= now + drv->delay;
+	if (atomic_dec_return(&ctx->retry_nr) <= 0) {
+		complete(&ctx->done);
+		return;
+	}
+again:
+	queue_work(drv->wq, &ctx->base.work);
 }
 
 static int show(struct seq_file *m, void *v)
@@ -80,6 +104,8 @@ static int show(struct seq_file *m, void *v)
 	ctx->m			= m;
 	ctx->drv		= drv;
 	ctx->prev_jiffies	= now;
+	if (unlikely(drv->delay))
+		ctx->expire	= now+drv->delay;
 	seq_printf(m, "%10s %6s %8s %6s %9s %9s %3s %-21s\n",
 		   "time", "delta", "call", "inirq", "inatomic",
 		   "pid", "cpu", "cmd");
@@ -97,6 +123,8 @@ static int show(struct seq_file *m, void *v)
 	}
 	ret = 0;
 done:
+	if (!cancel_work_sync(&ctx->base.work))
+		flush_work(&ctx->base.work);
 	kfree(ctx);
 	return ret;
 }
@@ -137,6 +165,7 @@ static int __init init(void)
 			end = drv;
 			goto err;
 		}
+		drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 		drv->wq		= wq;
 		fops		= &drv->fops;
 		fops->owner	= THIS_MODULE;
