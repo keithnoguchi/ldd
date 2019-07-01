@@ -30,6 +30,11 @@ static struct jitsched_driver {
 		.default_delay_ms	= 1000,	/* 1 sec */
 		.name			= "jitsched",
 	},
+	{
+		.max_retry		= 12,	/* max retry */
+		.default_delay_ms	= 1000,	/* 1 sec */
+		.name			= "jitschedto",
+	},
 };
 
 static void *start(struct seq_file *m, loff_t *pos)
@@ -109,7 +114,7 @@ static int __init init(void)
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
 	struct proc_dir_entry *proc;
-	char path[16]; /* strlen("driver/")+strlen(drv->name)+1 */
+	char path[18]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
 	for (drv = jitsched_drivers; drv != end; drv++) {

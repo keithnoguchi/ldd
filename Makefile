@@ -27,7 +27,6 @@ MODS  += jiffies
 MODS  += jitbusy
 MODS  += jitsched
 MODS  += jitqueue
-MODS  += jitschedto
 MODS  += jitimer
 MODS  += jitasklet
 MODS  += jiwq

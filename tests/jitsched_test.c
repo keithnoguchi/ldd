@@ -10,16 +10,20 @@
 
 struct test {
 	const char	*const name;
+	const char	*const path;
 	unsigned int	delay_ms;
 };
 
 static int test(const struct test *restrict t)
 {
-	const char *const path = "/proc/driver/jitsched";
+	char *path[PATH_MAX];
 	char buf[512];
 	FILE *fp;
 	int ret;
 
+	ret = snprintf(path, sizeof(path), "/proc/driver/%s", t->path);
+	if (ret < 0)
+		goto perr;
 	fp = fopen(path, "w");
 	if (!fp)
 		goto perr;
@@ -60,18 +64,42 @@ int main(void)
 	const struct test *t, tests[] = {
 		{
 			.name		= "schedule based 1ms delay",
+			.path		= "jitsched",
 			.delay_ms	= 1,
 		},
 		{
 			.name		= "schedule based 2ms delay",
+			.path		= "jitsched",
 			.delay_ms	= 2,
 		},
 		{
 			.name		= "schedule based 4ms delay",
+			.path		= "jitsched",
 			.delay_ms	= 4,
 		},
 		{
 			.name		= "schedule based 8ms delay",
+			.path		= "jitsched",
+			.delay_ms	= 8,
+		},
+		{
+			.name		= "schedule_timeout() based 1ms delay",
+			.path		= "jitschedto",
+			.delay_ms	= 1,
+		},
+		{
+			.name		= "schedule_timeout() based 2ms delay",
+			.path		= "jitschedto",
+			.delay_ms	= 2,
+		},
+		{
+			.name		= "schedule_timeout() based 4ms delay",
+			.path		= "jitschedto",
+			.delay_ms	= 4,
+		},
+		{
+			.name		= "schedule_timeout() based 8ms delay",
+			.path		= "jitschedto",
 			.delay_ms	= 8,
 		},
 		{.name = NULL},

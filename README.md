@@ -76,8 +76,6 @@
   - [jitsched_test.c]: [jitsched.c] self test
 - [jitqueue.c]: Wait queue based delay module
   - [jitqueue_test.c]: [jitqueue.c] self test
-- [jitschedto.c]: schedule_timeout() based delay module
-  - [jitschedto_test.c]: [jitschedto.c] self test
 - [jitimer.c]: Kernel timer based delay module
   - [jitimer_test.c]: [jitimer.c] self test
 - [jitasklet.c]: Tasklet based delay module
