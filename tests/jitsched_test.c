@@ -16,7 +16,7 @@ struct test {
 
 static int test(const struct test *restrict t)
 {
-	char *path[PATH_MAX];
+	char path[PATH_MAX];
 	char buf[512];
 	FILE *fp;
 	int ret;

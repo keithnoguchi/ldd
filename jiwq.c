@@ -215,6 +215,7 @@ static int __init init(void)
 		struct file_operations *fops;
 		struct workqueue_struct *wq;
 		struct proc_dir_entry *proc;
+
 		err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 		if (err < 0) {
 			end = drv;

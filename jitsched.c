@@ -21,6 +21,8 @@ static struct jitsched_driver {
 	struct proc_dir_entry	*proc;
 	const unsigned int	max_retry;
 	const unsigned int	default_delay_ms;
+	void			(*sched)(struct jitsched_driver *drv,
+					 unsigned long);
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
@@ -36,6 +38,20 @@ static struct jitsched_driver {
 		.name			= "jitschedto",
 	},
 };
+
+static void sched(struct jitsched_driver *drv, unsigned long start)
+{
+	unsigned long end = start+HZ*drv->delay_ms/MSEC_PER_SEC;
+	while (time_before(jiffies, end))
+		schedule();
+}
+
+static void sched_timeout(struct jitsched_driver *drv, unsigned long unused)
+{
+	long delay = HZ*drv->delay_ms/MSEC_PER_SEC;
+	while (delay > 0)
+		delay = schedule_timeout_interruptible(delay);
+}
 
 static void *start(struct seq_file *m, loff_t *pos)
 {
@@ -63,9 +79,8 @@ static int show(struct seq_file *m, void *v)
 {
 	struct jitsched_driver *drv = v;
 	unsigned long start = jiffies;
-	unsigned long end = start+HZ*drv->delay_ms/MSEC_PER_SEC;
-	while (time_before(jiffies, end))
-		schedule();
+
+	(*drv->sched)(drv, start);
 	seq_printf(m, "%9ld %9ld\n", start&0xffffffff, jiffies&0xffffffff);
 	return 0;
 }
@@ -111,13 +126,14 @@ static int __init init(void)
 {
 	struct jitsched_driver *drv = jitsched_drivers;
 	struct jitsched_driver *end = drv+ARRAY_SIZE(jitsched_drivers);
-	struct file_operations *fops = drv->fops;
-	struct seq_operations *sops = drv->sops;
-	struct proc_dir_entry *proc;
 	char path[18]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
 	for (drv = jitsched_drivers; drv != end; drv++) {
+		struct file_operations *fops;
+		struct seq_operations *sops;
+		struct proc_dir_entry *proc;
+
 		err = snprintf(path, sizeof(path), "driver/%s", drv->name);
 		if (err < 0) {
 			end = drv;
@@ -125,10 +141,15 @@ static int __init init(void)
 		}
 		mutex_init(&drv->lock);
 		drv->delay_ms	= drv->default_delay_ms;
+		drv->sched	= sched;
+		if (!strcmp(drv->name, "jitschedto"))
+			drv->sched	= sched_timeout;
+		sops		= drv->sops;
 		sops->start	= start;
 		sops->stop	= stop;
 		sops->next	= next;
 		sops->show	= show;
+		fops		= drv->fops;
 		fops->owner	= THIS_MODULE;
 		fops->read	= seq_read;
 		fops->write	= write;
