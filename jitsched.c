@@ -24,10 +24,12 @@ static struct jitsched_driver {
 	const char		*const name;
 	struct seq_operations	sops[1];
 	struct file_operations	fops[1];
-} jitsched_driver = {
-	.max_retry		= 12,	/* max retry */
-	.default_delay_ms	= 1000,	/* 1 sec */
-	.name			= "jitsched",
+} jitsched_drivers[] = {
+	{
+		.max_retry		= 12,	/* max retry */
+		.default_delay_ms	= 1000,	/* 1 sec */
+		.name			= "jitsched",
+	},
 };
 
 static void *start(struct seq_file *m, loff_t *pos)
@@ -102,39 +104,54 @@ static int open(struct inode *ip, struct file *fp)
 
 static int __init init(void)
 {
-	struct jitsched_driver *drv = &jitsched_driver;
+	struct jitsched_driver *drv = jitsched_drivers;
+	struct jitsched_driver *end = drv+ARRAY_SIZE(jitsched_drivers);
 	struct file_operations *fops = drv->fops;
 	struct seq_operations *sops = drv->sops;
 	struct proc_dir_entry *proc;
 	char path[16]; /* strlen("driver/")+strlen(drv->name)+1 */
 	int err;
 
-	err = snprintf(path, sizeof(path), "driver/%s", drv->name);
-	if (err < 0)
-		return err;
-	mutex_init(&drv->lock);
-	drv->delay_ms	= drv->default_delay_ms;
-	sops->start	= start;
-	sops->stop	= stop;
-	sops->next	= next;
-	sops->show	= show;
-	fops->owner	= THIS_MODULE,
-	fops->read	= seq_read;
-	fops->write	= write;
-	fops->open	= open;
-	fops->release	= seq_release;
-	proc = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
-	if (IS_ERR(proc))
-		return PTR_ERR(proc);
-	drv->proc	= proc;
+	for (drv = jitsched_drivers; drv != end; drv++) {
+		err = snprintf(path, sizeof(path), "driver/%s", drv->name);
+		if (err < 0) {
+			end = drv;
+			goto err;
+		}
+		mutex_init(&drv->lock);
+		drv->delay_ms	= drv->default_delay_ms;
+		sops->start	= start;
+		sops->stop	= stop;
+		sops->next	= next;
+		sops->show	= show;
+		fops->owner	= THIS_MODULE;
+		fops->read	= seq_read;
+		fops->write	= write;
+		fops->open	= open;
+		fops->release	= seq_release;
+		proc = proc_create_data(path, S_IRUGO|S_IWUSR, NULL, fops, drv);
+		if (IS_ERR(proc)) {
+			err = PTR_ERR(proc);
+			end = drv;
+			goto err;
+		}
+		drv->proc	= proc;
+	}
 	return 0;
+err:
+	for (drv = jitsched_drivers; drv != end; drv++)
+		proc_remove(drv->proc);
+	return err;
 }
 module_init(init);
 
 static void __exit term(void)
 {
-	struct jitsched_driver *drv = &jitsched_driver;
-	proc_remove(drv->proc);
+	struct jitsched_driver *drv = jitsched_drivers;
+	struct jitsched_driver *end = drv+ARRAY_SIZE(jitsched_drivers);
+
+	for (drv = jitsched_drivers; drv != end; drv++)
+		proc_remove(drv->proc);
 }
 module_exit(term);
 
