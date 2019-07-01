@@ -31,6 +31,9 @@ static struct jiwq_driver {
 #define JIWQ_TYPE_DELAY		(1 << 0)
 #define JIWQ_TYPE_SINGLE	(1 << 1)
 #define JIWQ_TYPE_SHARED	(1 << 2)
+	bool			(*queue)(struct jiwq_driver *drv,
+					 struct jiwq_context *ctx);
+	void			(*cancel)(struct jiwq_context *ctx);
 	unsigned long		delay;
 	const unsigned int	default_retry_nr;
 	const unsigned int	default_delay_ms;
@@ -83,6 +86,28 @@ static struct jiwq_driver {
 	},
 };
 
+static bool queue(struct jiwq_driver *drv, struct jiwq_context *ctx)
+{
+	return queue_work(drv->wq, &ctx->base.work);
+}
+
+static bool queue_delayed(struct jiwq_driver *drv, struct jiwq_context *ctx)
+{
+	return queue_delayed_work(drv->wq, &ctx->base, drv->delay);
+}
+
+static void cancel(struct jiwq_context *ctx)
+{
+	if (!cancel_work_sync(&ctx->base.work))
+		flush_work(&ctx->base.work);
+}
+
+static void cancel_delayed(struct jiwq_context *ctx)
+{
+	if (!cancel_delayed_work_sync(&ctx->base))
+		flush_delayed_work(&ctx->base);
+}
+
 static void work(struct work_struct *w)
 {
 	struct jiwq_context *ctx = container_of(to_delayed_work(w),
@@ -109,7 +134,7 @@ static void work(struct work_struct *w)
 		return;
 	}
 again:
-	queue_work(drv->wq, &ctx->base.work);
+	(*drv->queue)(drv, ctx);
 }
 
 static int show(struct seq_file *m, void *v)
@@ -123,7 +148,10 @@ static int show(struct seq_file *m, void *v)
 	if (IS_ERR(ctx))
 		return PTR_ERR(ctx);
 	init_completion(&ctx->done);
-	INIT_WORK(&ctx->base.work, work);
+	if (drv->type & JIWQ_TYPE_DELAY)
+		INIT_DELAYED_WORK(&ctx->base, work);
+	else
+		INIT_WORK(&ctx->base.work, work);
 	atomic_set(&ctx->retry_nr, drv->default_retry_nr);
 	ctx->m			= m;
 	ctx->drv		= drv;
@@ -137,7 +165,7 @@ static int show(struct seq_file *m, void *v)
 		   now&0xffffffff, 0, 0, in_interrupt(),
 		   in_atomic(), task_pid_nr(current),
 		   smp_processor_id(), current->comm);
-	if (!queue_work(drv->wq, &ctx->base.work)) {
+	if (!(*drv->queue)(drv, ctx)) {
 		ret = -EINVAL;
 		goto done;
 	}
@@ -147,8 +175,7 @@ static int show(struct seq_file *m, void *v)
 	}
 	ret = 0;
 done:
-	if (!cancel_work_sync(&ctx->base.work))
-		flush_work(&ctx->base.work);
+	(*drv->cancel)(ctx);
 	kfree(ctx);
 	return ret;
 }
@@ -204,6 +231,12 @@ static int __init init(void)
 			end = drv;
 			goto err;
 		}
+		drv->queue	= queue;
+		drv->cancel	= cancel;
+		if (drv->type & JIWQ_TYPE_DELAY) {
+			drv->queue	= queue_delayed;
+			drv->cancel	= cancel_delayed;
+		}
 		drv->delay	= HZ*drv->default_delay_ms/MSEC_PER_SEC;
 		drv->wq		= wq;
 		fops		= &drv->fops;
@@ -239,6 +272,7 @@ static void __exit term(void)
 	struct jiwq_driver *end = drv+ARRAY_SIZE(jiwq_drivers);
 
 	for (drv = jiwq_drivers; drv != end; drv++) {
+		flush_workqueue(drv->wq);
 		if (!(drv->type & JIWQ_TYPE_SHARED))
 			destroy_workqueue(drv->wq);
 		proc_remove(drv->proc);
