@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -14,12 +16,42 @@ struct test {
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	int ret, fd;
+
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+	fd = open(path, O_RDWR);
+	if (fd == -1)
+		goto perr;
+	if (close(fd) == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "lseek16",
+			.dev	= "lseek16",
+		},
+		{
+			.name	= "lseek64",
+			.dev	= "lseek64",
+		},
+		{
+			.name	= "lseek128",
+			.dev	= "lseek128",
+		},
+		{
+			.name	= "lseek256",
+			.dev	= "lseek256",
+		},
 		{.name = NULL},
 	};
 
