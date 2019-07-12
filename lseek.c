@@ -65,16 +65,36 @@ static loff_t llseek(struct file *fp, loff_t offset, int whence)
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
 {
 	struct lseek_device *dev = fp->private_data;
-	printk(KERN_DEBUG "read[%s]\n", dev_name(&dev->base));
-	return 0;
+	size_t rem;
+	char *ptr;
+	int ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	if (count+*pos > dev->len)
+		count = dev->len-*pos;
+	if (count < 0)
+		count = 0;
+	ptr = dev->buf+*pos;
+	rem = count;
+	do {
+		size_t nr = copy_to_user(buf, ptr, rem);
+		buf += rem-nr;
+		ptr += rem-nr;
+		rem = nr;
+	} while (rem);
+	ret = count;
+	*pos += count;
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 		     loff_t *pos)
 {
 	struct lseek_device *dev = fp->private_data;
+	size_t rem;
 	char *ptr;
-	int rem;
 	int ret;
 
 	if (mutex_lock_interruptible(&dev->lock))
