@@ -20,7 +20,7 @@ struct test {
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
-	char buf[LINE_MAX];
+	char buf[t->len];
 	int ret, fd;
 	long val;
 	FILE *fp;
@@ -54,6 +54,7 @@ static void test(const struct test *restrict t)
 	if (ret != t->len) {
 		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %d\n",
 			t->name, t->len, ret);
+		goto err;
 	}
 	if (close(fd) == -1)
 		goto perr;
@@ -70,7 +71,7 @@ static void test(const struct test *restrict t)
 		goto perr;
 	val = strtol(buf, NULL, 10);
 	if (val != t->len) {
-		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n-  got: %ld\n",
+		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %ld\n",
 			t->name, t->len, val);
 		goto err;
 	}
@@ -85,32 +86,123 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "lseek16",
+			.name	= "16 bytes on /dev/lseek16",
 			.dev	= "lseek16",
 			.alloc	= 16,
-			.data	= "0123456789",
-			.len	= 10,
+			.data	= "0123456789012345",
+			.len	= 16,
 		},
 		{
-			.name	= "lseek64",
+			.name	= "8 bytes on /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "01234567",
+			.len	= 8,
+		},
+		{
+			.name	= "64 bytes on /dev/lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
-			.data	= "0123456789",
-			.len	= 10,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.len	= 64,
 		},
 		{
-			.name	= "lseek128",
+			.name	= "32 bytes on /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"01",
+			.len	= 32,
+		},
+		{
+			.name	= "128 bytes on /dev/lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
-			.data	= "0123456789",
-			.len	= 10,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.len	= 128,
 		},
 		{
-			.name	= "lseek256",
+			.name	= "64 bytes on /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.len	= 64,
+		},
+		{
+			.name	= "256 bytes on /dev/lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
-			.data	= "0123456789",
-			.len	= 10,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+			.len	= 256,
+		},
+		{
+			.name	= "128 bytes on /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.len	= 128,
 		},
 		{.name = NULL},
 	};
