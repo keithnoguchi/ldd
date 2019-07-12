@@ -7,9 +7,12 @@
 #include <linux/cdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
+#include <linux/err.h>
+#include <linux/slab.h>
 
 struct lseek_device {
 	size_t		alloc;
+	char		*buf;
 	struct cdev	cdev;
 	struct device	base;
 };
@@ -24,18 +27,22 @@ static struct lseek_driver {
 	.base.owner		= THIS_MODULE,
 	.devs[0]	= {
 		.alloc		= 16,
+		.buf		= NULL,
 		.base.init_name	= "lseek16",
 	},
 	.devs[1]	= {
 		.alloc		= 64,
+		.buf		= NULL,
 		.base.init_name	= "lseek64",
 	},
 	.devs[2]	= {
 		.alloc		= 128,
+		.buf		= NULL,
 		.base.init_name	= "lseek128",
 	},
 	.devs[3]	= {
 		.alloc		= 256,
+		.buf		= NULL,
 		.base.init_name	= "lseek256",
 	},
 };
@@ -85,6 +92,12 @@ static int __init init(void)
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
 						MINOR(drv->devt)+i);
 		cdev_init(&dev->cdev, &drv->fops);
+		dev->buf = kmalloc(dev->alloc, GFP_KERNEL);
+		if (IS_ERR(dev->buf)) {
+			err = PTR_ERR(dev->buf);
+			end = dev;
+			goto err;
+		}
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			end = dev;
@@ -93,8 +106,10 @@ static int __init init(void)
 	}
 	return 0;
 err:
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
 		cdev_device_del(&dev->cdev, &dev->base);
+		kfree(dev->buf);
+	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	return err;
 }
@@ -106,8 +121,10 @@ static void __exit term(void)
 	struct lseek_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct lseek_device *dev;
 
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
 		cdev_device_del(&dev->cdev, &dev->base);
+		kfree(dev->buf);
+	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 }
 module_exit(term);
