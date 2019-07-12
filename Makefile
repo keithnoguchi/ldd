@@ -22,6 +22,7 @@ MODS  += sleepy
 MODS  += scullpipe
 MODS  += scullfifo
 MODS  += poll
+MODS  += lseek
 MODS  += hz
 MODS  += jiffies
 MODS  += jitbusy

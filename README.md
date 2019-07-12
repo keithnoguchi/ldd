@@ -61,8 +61,15 @@
   - [scullpipe_test.c](tests/scullpipe_test.c): scullpipe.c self test
 - [scullfifo.c](scullfifo.c): FIFO version of the scullpipe.c
   - [scullfifo_test.c](tests/scullfifo_test.c): scullfifo.c self test
-- [poll.c](poll.c): select(2), poll(2), and epoll(7) test module
-  - [poll_test.c](tests/poll_test.c): poll.c self test
+- [poll.c]: select(2), poll(2), and epoll(7) test module
+  - [poll_test.c]: [poll.c] self test
+- [lseek.c]: lseek(2) test module
+  - [lseek_test.c]: [lseek.c] self test
+
+[poll.c]: poll.c
+[lseek.c]: lseek.c
+[poll_test.c]: tests/poll_test.c
+[lseek_test.c]: tests/lseek_test.c
 
 ### Time, Delays, and Deferred Work
 
