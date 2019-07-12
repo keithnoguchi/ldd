@@ -5,9 +5,11 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
+#include <linux/sysfs.h>
 #include <linux/device.h>
 
 struct lseek_device {
+	size_t		alloc;
 	struct cdev	cdev;
 	struct device	base;
 };
@@ -21,18 +23,37 @@ static struct lseek_driver {
 	.base.name		= "lseek",
 	.base.owner		= THIS_MODULE,
 	.devs[0]	= {
+		.alloc		= 16,
 		.base.init_name	= "lseek16",
 	},
 	.devs[1]	= {
+		.alloc		= 64,
 		.base.init_name	= "lseek64",
 	},
 	.devs[2]	= {
+		.alloc		= 128,
 		.base.init_name	= "lseek128",
 	},
 	.devs[3]	= {
+		.alloc		= 256,
 		.base.init_name	= "lseek256",
 	},
 };
+
+static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
+			   char *page)
+{
+	struct lseek_device *dev = container_of(base, struct lseek_device,
+						base);
+	return snprintf(page, PAGE_SIZE, "%ld\n", dev->alloc);
+}
+static DEVICE_ATTR_RO(alloc);
+
+static struct attribute *lseek_attrs[] = {
+	&dev_attr_alloc.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(lseek);
 
 static int init_driver(struct lseek_driver *drv)
 {
@@ -60,7 +81,9 @@ static int __init init(void)
 		return err;
 	for (dev = drv->devs, i = 0; dev != end; dev++, i++) {
 		device_initialize(&dev->base);
-		dev->base.devt = MKDEV(MAJOR(drv->devt), MINOR(drv->devt)+i);
+		dev->base.groups	= lseek_groups;
+		dev->base.devt		= MKDEV(MAJOR(drv->devt),
+						MINOR(drv->devt)+i);
 		cdev_init(&dev->cdev, &drv->fops);
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {

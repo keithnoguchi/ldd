@@ -12,13 +12,34 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	const size_t	alloc;
 };
 
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
+	char buf[LINE_MAX];
 	int ret, fd;
+	long val;
+	FILE *fp;
 
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/alloc", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->alloc) {
+		fprintf(stderr, "%s: unexpected alloc value:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->alloc, val);
+		goto err;
+	}
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
@@ -30,6 +51,7 @@ static void test(const struct test *restrict t)
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
+err:
 	exit(EXIT_FAILURE);
 }
 
@@ -39,18 +61,22 @@ int main(void)
 		{
 			.name	= "lseek16",
 			.dev	= "lseek16",
+			.alloc	= 16,
 		},
 		{
 			.name	= "lseek64",
 			.dev	= "lseek64",
+			.alloc	= 64,
 		},
 		{
 			.name	= "lseek128",
 			.dev	= "lseek128",
+			.alloc	= 128,
 		},
 		{
 			.name	= "lseek256",
 			.dev	= "lseek256",
+			.alloc	= 256,
 		},
 		{.name = NULL},
 	};
