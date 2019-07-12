@@ -13,6 +13,8 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	const size_t	alloc;
+	const char	*const data;
+	const size_t	len;
 };
 
 static void test(const struct test *restrict t)
@@ -43,11 +45,35 @@ static void test(const struct test *restrict t)
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
-	fd = open(path, O_RDWR);
+	fd = open(path, O_WRONLY|O_TRUNC);
 	if (fd == -1)
 		goto perr;
+	ret = write(fd, t->data, t->len);
+	if (ret == -1)
+		goto perr;
+	if (ret != t->len) {
+		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %d\n",
+			t->name, t->len, ret);
+	}
 	if (close(fd) == -1)
 		goto perr;
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/len", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	val = strtol(buf, NULL, 10);
+	if (val != t->len) {
+		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n-  got: %ld\n",
+			t->name, t->len, val);
+		goto err;
+	}
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -62,21 +88,29 @@ int main(void)
 			.name	= "lseek16",
 			.dev	= "lseek16",
 			.alloc	= 16,
+			.data	= "0123456789",
+			.len	= 10,
 		},
 		{
 			.name	= "lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
+			.data	= "0123456789",
+			.len	= 10,
 		},
 		{
 			.name	= "lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
+			.data	= "0123456789",
+			.len	= 10,
 		},
 		{
 			.name	= "lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
+			.data	= "0123456789",
+			.len	= 10,
 		},
 		{.name = NULL},
 	};
