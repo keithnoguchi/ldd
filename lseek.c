@@ -15,7 +15,7 @@
 struct lseek_device {
 	size_t		alloc;
 	struct mutex	lock;
-	size_t		len;
+	size_t		size;
 	char		*buf;
 	struct cdev	cdev;
 	struct device	base;
@@ -32,25 +32,25 @@ static struct lseek_driver {
 	.devs[0]	= {
 		.alloc		= 16,
 		.buf		= NULL,
-		.len		= 0,
+		.size		= 0,
 		.base.init_name	= "lseek16",
 	},
 	.devs[1]	= {
 		.alloc		= 64,
 		.buf		= NULL,
-		.len		= 0,
+		.size		= 0,
 		.base.init_name	= "lseek64",
 	},
 	.devs[2]	= {
 		.alloc		= 128,
 		.buf		= NULL,
-		.len		= 0,
+		.size		= 0,
 		.base.init_name	= "lseek128",
 	},
 	.devs[3]	= {
 		.alloc		= 256,
 		.buf		= NULL,
-		.len		= 0,
+		.size		= 0,
 		.base.init_name	= "lseek256",
 	},
 };
@@ -58,8 +58,36 @@ static struct lseek_driver {
 static loff_t llseek(struct file *fp, loff_t offset, int whence)
 {
 	struct lseek_device *dev = fp->private_data;
-	printk(KERN_DEBUG "llseek[%s]\n", dev_name(&dev->base));
-	return 0;
+	loff_t ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	switch (whence) {
+	case SEEK_SET:
+		break;
+	case SEEK_CUR:
+		if (offset == 0) {
+			ret = fp->f_pos;
+			goto out;
+		}
+		offset += fp->f_pos;
+		break;
+	case SEEK_END:
+		offset += dev->size;
+		break;
+	default:
+		ret = -EINVAL;
+		goto out;
+	}
+	if (offset < 0) {
+		ret = -EINVAL;
+		goto out;
+	}
+	fp->f_pos = offset;
+	ret = offset;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos)
@@ -71,8 +99,8 @@ static ssize_t read(struct file *fp, char __user *buf, size_t count, loff_t *pos
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	if (count+*pos > dev->len)
-		count = dev->len-*pos;
+	if (count+*pos > dev->size)
+		count = dev->size-*pos;
 	if (count < 0)
 		count = 0;
 	ptr = dev->buf+*pos;
@@ -115,8 +143,8 @@ static ssize_t write(struct file *fp, const char __user *buf, size_t count,
 	} while (rem);
 	ret = count;
 	*pos += count;
-	if (*pos > dev->len)
-		dev->len = *pos;
+	if (*pos > dev->size)
+		dev->size = *pos;
 out:
 	mutex_unlock(&dev->lock);
 	return ret;
@@ -130,7 +158,7 @@ static int open(struct inode *ip, struct file *fp)
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	if (fp->f_flags&O_TRUNC)
-		dev->len = 0;
+		dev->size = 0;
 	mutex_unlock(&dev->lock);
 	return 0;
 }
@@ -144,7 +172,7 @@ static ssize_t alloc_show(struct device *base, struct device_attribute *attr,
 }
 static DEVICE_ATTR_RO(alloc);
 
-static ssize_t len_show(struct device *base, struct device_attribute *attr,
+static ssize_t size_show(struct device *base, struct device_attribute *attr,
 			char *page)
 {
 	struct lseek_device *dev = container_of(base, struct lseek_device,
@@ -153,15 +181,15 @@ static ssize_t len_show(struct device *base, struct device_attribute *attr,
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
-	val = dev->len;
+	val = dev->size;
 	mutex_unlock(&dev->lock);
 	return snprintf(page, PAGE_SIZE, "%ld\n", val);
 }
-static DEVICE_ATTR_RO(len);
+static DEVICE_ATTR_RO(size);
 
 static struct attribute *lseek_attrs[] = {
 	&dev_attr_alloc.attr,
-	&dev_attr_len.attr,
+	&dev_attr_size.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(lseek);

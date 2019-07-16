@@ -14,13 +14,13 @@ struct test {
 	const char	*const dev;
 	const size_t	alloc;
 	const char	*const data;
-	const size_t	len;
+	const size_t	size;
 };
 
 static void test(const struct test *restrict t)
 {
 	char path[PATH_MAX];
-	char buf[t->len];
+	char buf[t->size];
 	int ret, fd;
 	long val;
 	FILE *fp;
@@ -48,17 +48,17 @@ static void test(const struct test *restrict t)
 	fd = open(path, O_WRONLY|O_TRUNC);
 	if (fd == -1)
 		goto perr;
-	ret = write(fd, t->data, t->len);
+	ret = write(fd, t->data, t->size);
 	if (ret == -1)
 		goto perr;
-	if (ret != t->len) {
+	if (ret != t->size) {
 		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %d\n",
-			t->name, t->len, ret);
+			t->name, t->size, ret);
 		goto err;
 	}
 	if (close(fd) == -1)
 		goto perr;
-	ret = snprintf(path, sizeof(path), "/sys/devices/%s/len", t->dev);
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/size", t->dev);
 	if (ret < 0)
 		goto perr;
 	fp = fopen(path, "r");
@@ -70,9 +70,9 @@ static void test(const struct test *restrict t)
 	if (fclose(fp) == -1)
 		goto perr;
 	val = strtol(buf, NULL, 10);
-	if (val != t->len) {
+	if (val != t->size) {
 		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %ld\n",
-			t->name, t->len, val);
+			t->name, t->size, val);
 		goto err;
 	}
 	exit(EXIT_SUCCESS);
@@ -90,14 +90,14 @@ int main(void)
 			.dev	= "lseek16",
 			.alloc	= 16,
 			.data	= "0123456789012345",
-			.len	= 16,
+			.size	= 16,
 		},
 		{
 			.name	= "8 bytes on /dev/lseek16",
 			.dev	= "lseek16",
 			.alloc	= 16,
 			.data	= "01234567",
-			.len	= 8,
+			.size	= 8,
 		},
 		{
 			.name	= "64 bytes on /dev/lseek64",
@@ -110,7 +110,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"0123",
-			.len	= 64,
+			.size	= 64,
 		},
 		{
 			.name	= "32 bytes on /dev/lseek64",
@@ -120,7 +120,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"01",
-			.len	= 32,
+			.size	= 32,
 		},
 		{
 			.name	= "128 bytes on /dev/lseek128",
@@ -139,7 +139,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"01234567",
-			.len	= 128,
+			.size	= 128,
 		},
 		{
 			.name	= "64 bytes on /dev/lseek128",
@@ -152,7 +152,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"0123",
-			.len	= 64,
+			.size	= 64,
 		},
 		{
 			.name	= "256 bytes on /dev/lseek256",
@@ -183,7 +183,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"012345",
-			.len	= 256,
+			.size	= 256,
 		},
 		{
 			.name	= "128 bytes on /dev/lseek256",
@@ -202,7 +202,7 @@ int main(void)
 				"0123456789"
 				"0123456789"
 				"01234567",
-			.len	= 128,
+			.size	= 128,
 		},
 		{.name = NULL},
 	};
