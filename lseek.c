@@ -79,11 +79,13 @@ static loff_t llseek(struct file *fp, loff_t offset, int whence)
 		ret = -EINVAL;
 		goto out;
 	}
-	if (offset < 0) {
+	if (offset < 0 || offset > dev->alloc) {
 		ret = -EINVAL;
 		goto out;
 	}
 	fp->f_pos = offset;
+	if (offset > dev->size)
+		dev->size = offset;
 	ret = offset;
 out:
 	mutex_unlock(&dev->lock);
