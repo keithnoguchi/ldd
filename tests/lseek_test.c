@@ -108,6 +108,568 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
+			.name	= "0 byte SEEK_SET on 16 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "0123456789012345",
+			.wsize	= 16,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 16,
+			.size	= 16,
+			.want	= "0123456789012345",
+		},
+		{
+			.name	= "8 bytes SEEK_SET on 16 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "0123456789012345",
+			.wsize	= 16,
+			.seek	= 8,
+			.whence	= SEEK_SET,
+			.rsize	= 8,
+			.size	= 16,
+			.want	= "89012345",
+		},
+		{
+			.name	= "16 bytes SEEK_SET on 16 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "0123456789012345",
+			.wsize	= 16,
+			.seek	= 16,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 16,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 8 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "01234567",
+			.wsize	= 8,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 8,
+			.size	= 8,
+			.want	= "01234567",
+		},
+		{
+			.name	= "8 bytes SEEK_SET on 8 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "01234567",
+			.wsize	= 8,
+			.seek	= 8,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 8,
+		},
+		{
+			.name	= "16 bytes SEEK_SET on 8 bytes /dev/lseek16",
+			.dev	= "lseek16",
+			.alloc	= 16,
+			.data	= "01234567",
+			.wsize	= 8,
+			.seek	= 16,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 16,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 64 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 64,
+			.size	= 64,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+		},
+		{
+			.name	= "32 bytes SEEK_SET on 64 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 32,
+			.whence	= SEEK_SET,
+			.rsize	= 32,
+			.size	= 64,
+			.want	= "23456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+		},
+		{
+			.name	= "64 bytes SEEK_SET on 64 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 64,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 64,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 32 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"01",
+			.wsize	= 32,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 32,
+			.size	= 32,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"01",
+		},
+		{
+			.name	= "32 bytes SEEK_SET on 32 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"01",
+			.wsize	= 32,
+			.seek	= 32,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 32,
+		},
+		{
+			.name	= "64 bytes SEEK_SET on 32 bytes /dev/lseek64",
+			.dev	= "lseek64",
+			.alloc	= 64,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"01",
+			.wsize	= 32,
+			.seek	= 64,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 64,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 128 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 128,
+			.size	= 128,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+		},
+		{
+			.name	= "64 bytes SEEK_SET on 128 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 64,
+			.whence	= SEEK_SET,
+			.rsize	= 64,
+			.size	= 128,
+			.want	= "456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+		},
+		{
+			.name	= "128 bytes SEEK_SET on 128 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 128,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 128,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 64 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 64,
+			.size	= 64,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+		},
+		{
+			.name	= "64 bytes SEEK_SET on 64 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 64,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 64,
+		},
+		{
+			.name	= "128 bytes SEEK_SET on 64 bytes /dev/lseek128",
+			.dev	= "lseek128",
+			.alloc	= 128,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123",
+			.wsize	= 64,
+			.seek	= 128,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 128,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 256 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+			.wsize	= 256,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 256,
+			.size	= 256,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+		},
+		{
+			.name	= "128 bytes SEEK_SET on 256 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+			.wsize	= 256,
+			.seek	= 128,
+			.whence	= SEEK_SET,
+			.rsize	= 128,
+			.size	= 256,
+			.want	= "89"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+		},
+		{
+			.name	= "256 bytes SEEK_SET on 256 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"012345",
+			.wsize	= 256,
+			.seek	= 256,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 256,
+		},
+		{
+			.name	= "0 byte SEEK_SET on 128 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 0,
+			.whence	= SEEK_SET,
+			.rsize	= 128,
+			.size	= 128,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+		},
+		{
+			.name	= "128 bytes SEEK_SET on 128 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 128,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 128,
+			.want	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+		},
+		{
+			.name	= "256 bytes SEEK_SET on 128 bytes /dev/lseek256",
+			.dev	= "lseek256",
+			.alloc	= 256,
+			.data	= "0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"0123456789"
+				"01234567",
+			.wsize	= 128,
+			.seek	= 256,
+			.whence	= SEEK_SET,
+			.rsize	= 0,
+			.size	= 256,
+		},
+		{
 			.name	= "0 byte SEEK_CUR on 16 bytes /dev/lseek16",
 			.dev	= "lseek16",
 			.alloc	= 16,
@@ -194,7 +756,7 @@ int main(void)
 			.size	= 64,
 		},
 		{
-			.name	= "-32 byte SEEK_CUR on 64 bytes /dev/lseek64",
+			.name	= "-32 bytes SEEK_CUR on 64 bytes /dev/lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
 			.data	= "0123456789"
@@ -215,7 +777,7 @@ int main(void)
 				"0123",
 		},
 		{
-			.name	= "-64 byte SEEK_CUR on 64 bytes /dev/lseek64",
+			.name	= "-64 bytes SEEK_CUR on 64 bytes /dev/lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
 			.data	= "0123456789"
@@ -253,7 +815,7 @@ int main(void)
 			.size	= 32,
 		},
 		{
-			.name	= "-32 byte SEEK_CUR on 32 bytes /dev/lseek64",
+			.name	= "-32 bytes SEEK_CUR on 32 bytes /dev/lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
 			.data	= "0123456789"
@@ -271,7 +833,7 @@ int main(void)
 				"01",
 		},
 		{
-			.name	= "32 byte SEEK_CUR on 32 bytes /dev/lseek64",
+			.name	= "32 bytes SEEK_CUR on 32 bytes /dev/lseek64",
 			.dev	= "lseek64",
 			.alloc	= 64,
 			.data	= "0123456789"
@@ -309,7 +871,7 @@ int main(void)
 			.size	= 128,
 		},
 		{
-			.name	= "-64 byte SEEK_CUR on 128 bytes /dev/lseek128",
+			.name	= "-64 bytes SEEK_CUR on 128 bytes /dev/lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
 			.data	= "0123456789"
@@ -339,7 +901,7 @@ int main(void)
 				"01234567",
 		},
 		{
-			.name	= "-128 byte SEEK_CUR on 128 bytes /dev/lseek128",
+			.name	= "-128 bytes SEEK_CUR on 128 bytes /dev/lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
 			.data	= "0123456789"
@@ -392,7 +954,7 @@ int main(void)
 			.size	= 64,
 		},
 		{
-			.name	= "-64 byte SEEK_CUR on 64 bytes /dev/lseek128",
+			.name	= "-64 bytes SEEK_CUR on 64 bytes /dev/lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
 			.data	= "0123456789"
@@ -416,7 +978,7 @@ int main(void)
 				"0123",
 		},
 		{
-			.name	= "64 byte SEEK_CUR on 64 bytes /dev/lseek128",
+			.name	= "64 bytes SEEK_CUR on 64 bytes /dev/lseek128",
 			.dev	= "lseek128",
 			.alloc	= 128,
 			.data	= "0123456789"
@@ -468,7 +1030,7 @@ int main(void)
 			.size	= 256,
 		},
 		{
-			.name	= "-128 byte SEEK_CUR on 256 bytes /dev/lseek256",
+			.name	= "-128 bytes SEEK_CUR on 256 bytes /dev/lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
 			.data	= "0123456789"
@@ -516,7 +1078,7 @@ int main(void)
 				"012345",
 		},
 		{
-			.name	= "-256 byte SEEK_CUR on 256 bytes /dev/lseek256",
+			.name	= "-256 bytes SEEK_CUR on 256 bytes /dev/lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
 			.data	= "0123456789"
@@ -599,7 +1161,7 @@ int main(void)
 			.size	= 128,
 		},
 		{
-			.name	= "-128 byte SEEK_CUR on 128 bytes /dev/lseek256",
+			.name	= "-128 bytes SEEK_CUR on 128 bytes /dev/lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
 			.data	= "0123456789"
@@ -635,7 +1197,7 @@ int main(void)
 				"01234567",
 		},
 		{
-			.name	= "128 byte SEEK_CUR on 128 bytes /dev/lseek256",
+			.name	= "128 bytes SEEK_CUR on 128 bytes /dev/lseek256",
 			.dev	= "lseek256",
 			.alloc	= 256,
 			.data	= "0123456789"
