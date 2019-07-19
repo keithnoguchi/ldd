@@ -115,6 +115,14 @@
 [jitasklet_test.c]: tests/jitasklet_test.c
 [jiwq_test.c]: tests/jiwq_test.c
 
+### Memory related modules
+
+- [alloc.c]: Various memory allocation functionalities, kmalloc, vmalloc etc.
+  - [alloc_test.c]: [alloc.c] self test
+
+[alloc.c]: alloc.c
+[alloc_test.c]: tests/alloc_test.c
+
 ## Build
 
 ```sh

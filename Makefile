@@ -31,6 +31,7 @@ MODS  += jitqueue
 MODS  += jitimer
 MODS  += jitasklet
 MODS  += jiwq
+MODS  += alloc
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
