@@ -119,9 +119,13 @@
 
 - [alloc.c]: Various memory allocation functionalities, kmalloc, vmalloc etc.
   - [alloc_test.c]: [alloc.c] self test
+- [scullc.c]: Scull backed by the lookaside cache
+  - [scullc_test.c]: [scullc.c] self test
 
 [alloc.c]: alloc.c
+[scullc.c]: scullc.c
 [alloc_test.c]: tests/alloc_test.c
+[scullc_test.c]: tests/scullc_test.c
 
 ## Build
 
