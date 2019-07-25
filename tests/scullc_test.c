@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
 #include <sys/types.h>
@@ -10,16 +12,47 @@
 
 struct test {
 	const char	*const name;
+	const char	*const dev;
+	size_t		len;
 };
 
 static void test(const struct test *restrict t)
 {
+	char path[PATH_MAX];
+	char buf[t->len];
+	int ret, fd;
+
+	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
+	if (ret < 0)
+		goto perr;
+	fd = open(path, O_WRONLY);
+	if (fd == -1)
+		goto perr;
+	ret = write(fd, buf, t->len);
+	if (ret == -1)
+		goto perr;
+	if (ret != t->len) {
+		fprintf(stderr, "%s: unexpected write length:\n\t- want: %ld\n\t-  got: %d\n",
+			t->name, t->len, ret);
+		goto err;
+	}
+	if (close(fd) == -1)
+		goto perr;
 	exit(EXIT_SUCCESS);
+perr:
+	perror(t->name);
+err:
+	exit(EXIT_FAILURE);
 }
 
 int main(void)
 {
 	const struct test *t, tests[] = {
+		{
+			.name	= "write 4 bytes to scullc0",
+			.dev	= "scullc0",
+			.len	= 4096,
+		},
 		{.name = NULL},
 	};
 
