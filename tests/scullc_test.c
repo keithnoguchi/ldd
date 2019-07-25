@@ -49,9 +49,14 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "write 4 bytes to scullc0",
+			.name	= "write 1024 bytes to scullc0",
 			.dev	= "scullc0",
-			.len	= 4096,
+			.len	= 1024,
+		},
+		{
+			.name	= "write 1024 bytes to scullc1",
+			.dev	= "scullc1",
+			.len	= 1024,
 		},
 		{.name = NULL},
 	};
