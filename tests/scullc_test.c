@@ -14,14 +14,54 @@ struct test {
 	const char	*const name;
 	const char	*const dev;
 	size_t		len;
+	size_t		qset_size;
+	size_t		quantum_size;
 };
 
 static void test(const struct test *restrict t)
 {
+	char buf[t->len > 80 ? t->len : 80];
 	char path[PATH_MAX];
-	char buf[t->len];
 	int ret, fd;
+	long got;
+	FILE *fp;
 
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/qset_size",
+		       t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->qset_size) {
+		fprintf(stderr, "%s: unexpected qset size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->qset_size, got);
+		goto err;
+	}
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/quantum_size",
+		       t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->quantum_size) {
+		fprintf(stderr, "%s: unexpected quantum size:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->quantum_size, got);
+		goto err;
+	}
 	ret = snprintf(path, sizeof(path), "/dev/%s", t->dev);
 	if (ret < 0)
 		goto perr;
@@ -49,14 +89,18 @@ int main(void)
 {
 	const struct test *t, tests[] = {
 		{
-			.name	= "write 1024 bytes to scullc0",
-			.dev	= "scullc0",
-			.len	= 1024,
+			.name		= "write 1024 bytes to scullc0",
+			.dev		= "scullc0",
+			.len		= 1024,
+			.qset_size	= 511,
+			.quantum_size	= 4096,
 		},
 		{
-			.name	= "write 1024 bytes to scullc1",
-			.dev	= "scullc1",
-			.len	= 1024,
+			.name		= "write 1024 bytes to scullc1",
+			.dev		= "scullc1",
+			.len		= 1024,
+			.qset_size	= 511,
+			.quantum_size	= 4096,
 		},
 		{.name = NULL},
 	};

@@ -9,20 +9,22 @@
 #include <linux/device.h>
 #include <linux/slab.h>
 
-typedef void *scullc_quntum_t;
+typedef void *scullc_quantum_t;
 
 struct scullc_qset {
 	struct scullc_qset	*next;
-	scullc_quntum_t		qset[(PAGE_SIZE-sizeof(struct scullc_qset *))
-					/sizeof(scullc_quntum_t)];
+	scullc_quantum_t	qset[(PAGE_SIZE-sizeof(struct scullc_qset *))
+					/sizeof(scullc_quantum_t)];
 } ____cacheline_aligned_in_smp;
 
 struct scullc_device {
-	struct cdev	cdev;
-	struct device	base;
+	struct scullc_qset	*data;
+	struct cdev		cdev;
+	struct device		base;
 };
 
 static struct scullc_driver {
+	int			qset_size;
 	size_t			quantum_size;
 	struct kmem_cache	*quantums;
 	struct kmem_cache	*qsets;
@@ -31,13 +33,25 @@ static struct scullc_driver {
 	struct file_operations	fops;
 	struct scullc_device	devs[2];
 } scullc_driver = {
+	.qset_size	= sizeof(((struct scullc_qset *)0)->qset)/sizeof(scullc_quantum_t),
 	.quantum_size	= PAGE_SIZE,
 	.base.name	= "scullc",
 	.base.owner	= THIS_MODULE,
 };
 
+static ssize_t read(struct file *fp, char *__user buf, size_t count, loff_t *pos)
+{
+	struct scullc_device *dev = fp->private_data;
+	printk(KERN_DEBUG "read[%s:%s]\n", dev->base.driver->name,
+	       dev_name(&dev->base));
+	return 0;
+}
+
 static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff_t *pos)
 {
+	struct scullc_device *dev = fp->private_data;
+	printk(KERN_DEBUG "write[%s:%s]\n", dev->base.driver->name,
+	       dev_name(&dev->base));
 	*pos += count;
 	return count;
 }
@@ -49,8 +63,38 @@ static int open(struct inode *ip, struct file *fp)
 						 cdev);
 	printk(KERN_DEBUG "open[%s:%s]\n", dev->base.driver->name,
 	       dev_name(&dev->base));
+	fp->private_data = dev;
 	return 0;
 }
+
+static ssize_t quantum_size_show(struct device *base,
+				 struct device_attribute *attr,
+				 char *page)
+{
+	const struct scullc_driver *drv = container_of(base->driver,
+						       struct scullc_driver,
+						       base);
+	return snprintf(page, PAGE_SIZE, "%ld\n", drv->quantum_size);
+}
+static DEVICE_ATTR_RO(quantum_size);
+
+static ssize_t qset_size_show(struct device *base,
+			      struct device_attribute *attr,
+			      char *page)
+{
+	struct scullc_driver *drv = container_of(base->driver,
+						 struct scullc_driver,
+						 base);
+	return snprintf(page, PAGE_SIZE, "%d\n", drv->qset_size);
+}
+static DEVICE_ATTR_RO(qset_size);
+
+static struct attribute *scullc_attrs[] = {
+	&dev_attr_quantum_size.attr,
+	&dev_attr_qset_size.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(scullc);
 
 static int init_driver(struct scullc_driver *drv)
 {
@@ -77,6 +121,7 @@ static int init_driver(struct scullc_driver *drv)
 	}
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner	= drv->base.owner;
+	drv->fops.read	= read;
 	drv->fops.write	= write;
 	drv->fops.open	= open;
 	return 0;
@@ -105,6 +150,7 @@ static int __init init(void)
 						MINOR(drv->devt)+i);
 		dev->base.init_name	= name;
 		dev->base.driver	= &drv->base;
+		dev->base.groups	= scullc_groups;
 		err = cdev_device_add(&dev->cdev, &dev->base);
 		if (err) {
 			end = dev;
