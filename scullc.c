@@ -7,6 +7,7 @@
 #include <linux/cdev.h>
 #include <linux/sysfs.h>
 #include <linux/device.h>
+#include <linux/mutex.h>
 #include <linux/slab.h>
 
 typedef void *scullc_quantum_t;
@@ -18,7 +19,8 @@ struct scullc_qset {
 } ____cacheline_aligned_in_smp;
 
 struct scullc_device {
-	struct scullc_qset	*data;
+	struct mutex		lock;
+	struct scullc_qset	*qset;
 	struct cdev		cdev;
 	struct device		base;
 };
@@ -39,6 +41,43 @@ static struct scullc_driver {
 	.base.owner	= THIS_MODULE,
 };
 
+static struct scullc_qset *follow(struct scullc_device *dev, loff_t pos)
+{
+	struct scullc_driver *drv = container_of(dev->base.driver,
+						 struct scullc_driver,
+						 base);
+	int i, qset_pos = (pos+1)/(drv->qset_size*drv->quantum_size);
+	struct scullc_qset *newp, **qsetp = &dev->qset;
+
+	for (i = 0; i < qset_pos; i++) {
+		if (*qsetp) {
+			qsetp = &(*qsetp)->next;
+			continue;
+		}
+		newp = kmem_cache_zalloc(drv->qsets, GFP_KERNEL);
+		if (!newp)
+			return NULL;
+		*qsetp = newp;
+		qsetp = &newp->next;
+	}
+	if (!*qsetp)
+		*qsetp = kmem_cache_zalloc(drv->qsets, GFP_KERNEL);
+	return *qsetp;
+}
+
+static void trim(struct scullc_device *dev)
+{
+	struct scullc_driver *drv = container_of(dev->base.driver,
+						 struct scullc_driver,
+						 base);
+	struct scullc_qset *nextp, *qset;
+
+	for (qset = dev->qset; qset; qset = nextp) {
+		nextp = qset->next;
+		kmem_cache_free(drv->qsets, qset);
+	}
+}
+
 static ssize_t read(struct file *fp, char *__user buf, size_t count, loff_t *pos)
 {
 	struct scullc_device *dev = fp->private_data;
@@ -50,10 +89,21 @@ static ssize_t read(struct file *fp, char *__user buf, size_t count, loff_t *pos
 static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff_t *pos)
 {
 	struct scullc_device *dev = fp->private_data;
-	printk(KERN_DEBUG "write[%s:%s]\n", dev->base.driver->name,
-	       dev_name(&dev->base));
+	struct scullc_qset *qset;
+	int ret;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	qset = follow(dev, *pos);
+	if (!qset) {
+		ret = -ENOMEM;
+		goto out;
+	}
 	*pos += count;
-	return count;
+	ret = count;
+out:
+	mutex_unlock(&dev->lock);
+	return ret;
 }
 
 static int open(struct inode *ip, struct file *fp)
@@ -61,9 +111,13 @@ static int open(struct inode *ip, struct file *fp)
 	struct scullc_device *dev = container_of(ip->i_cdev,
 						 struct scullc_device,
 						 cdev);
-	printk(KERN_DEBUG "open[%s:%s]\n", dev->base.driver->name,
-	       dev_name(&dev->base));
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
 	fp->private_data = dev;
+	if (fp->f_flags&O_TRUNC)
+		trim(dev);
+	mutex_unlock(&dev->lock);
 	return 0;
 }
 
@@ -89,9 +143,29 @@ static ssize_t qset_size_show(struct device *base,
 }
 static DEVICE_ATTR_RO(qset_size);
 
+static ssize_t qset_count_show(struct device *base,
+			       struct device_attribute *attr,
+			       char *page)
+{
+	struct scullc_device *dev = container_of(base,
+						 struct scullc_device,
+						 base);
+	struct scullc_qset *qset;
+	size_t nr = 0;
+
+	if (mutex_lock_interruptible(&dev->lock))
+		return -ERESTARTSYS;
+	for (qset = dev->qset; qset; qset = qset->next)
+		nr++;
+	mutex_unlock(&dev->lock);
+	return snprintf(page, PAGE_SIZE, "%ld\n", nr);
+}
+static DEVICE_ATTR_RO(qset_count);
+
 static struct attribute *scullc_attrs[] = {
 	&dev_attr_quantum_size.attr,
 	&dev_attr_qset_size.attr,
+	&dev_attr_qset_count.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(scullc);
@@ -101,7 +175,7 @@ static int init_driver(struct scullc_driver *drv)
 	struct kmem_cache *cache;
 	int err;
 
-	cache = KMEM_CACHE(scullc_qset, SLAB_POISON);
+	cache = KMEM_CACHE(scullc_qset, 0);
 	if (IS_ERR(cache))
 		return PTR_ERR(cache);
 	drv->qsets = cache;
@@ -144,6 +218,8 @@ static int __init init(void)
 			end = dev;
 			goto err;
 		}
+		mutex_init(&dev->lock);
+		dev->qset		= NULL;
 		cdev_init(&dev->cdev, &drv->fops);
 		device_initialize(&dev->base);
 		dev->base.devt		= MKDEV(MAJOR(drv->devt),
@@ -174,8 +250,10 @@ static void __exit term(void)
 	struct scullc_device *end = drv->devs+ARRAY_SIZE(drv->devs);
 	struct scullc_device *dev;
 
-	for (dev = drv->devs; dev != end; dev++)
+	for (dev = drv->devs; dev != end; dev++) {
 		cdev_device_del(&dev->cdev, &dev->base);
+		trim(dev);
+	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	kmem_cache_destroy(drv->quantums);
 	kmem_cache_destroy(drv->qsets);

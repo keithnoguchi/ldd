@@ -16,6 +16,7 @@ struct test {
 	size_t		len;
 	size_t		qset_size;
 	size_t		quantum_size;
+	size_t		qset_count;
 };
 
 static void test(const struct test *restrict t)
@@ -78,6 +79,23 @@ static void test(const struct test *restrict t)
 	}
 	if (close(fd) == -1)
 		goto perr;
+	ret = snprintf(path, sizeof(path), "/sys/devices/%s/qset_count", t->dev);
+	if (ret < 0)
+		goto perr;
+	fp = fopen(path, "r");
+	if (!fp)
+		goto perr;
+	ret = fread(buf, sizeof(buf), 1, fp);
+	if (ret == 0 && ferror(fp))
+		goto perr;
+	if (fclose(fp) == -1)
+		goto perr;
+	got = strtol(buf, NULL, 10);
+	if (got != t->qset_count) {
+		fprintf(stderr, "%s: unexpected qset count:\n\t- want: %ld\n\t-  got: %ld\n",
+			t->name, t->qset_count, got);
+		goto err;
+	}
 	exit(EXIT_SUCCESS);
 perr:
 	perror(t->name);
@@ -94,13 +112,15 @@ int main(void)
 			.len		= 1024,
 			.qset_size	= 511,
 			.quantum_size	= 4096,
+			.qset_count	= (1024+1)/(511*4096)+1,
 		},
 		{
-			.name		= "write 1024 bytes to scullc1",
+			.name		= "write 2048 bytes to scullc1",
 			.dev		= "scullc1",
-			.len		= 1024,
+			.len		= 2048,
 			.qset_size	= 511,
 			.quantum_size	= 4096,
+			.qset_count	= (1024+1)/(511*4096)+1,
 		},
 		{.name = NULL},
 	};
