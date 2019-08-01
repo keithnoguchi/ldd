@@ -36,6 +36,12 @@ MODS  += scullc
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
+KMAJ  := $(shell uname -r|sed -e 's/\([0-9]\+\)\..*/\1/')
+ifeq ($(KMAJ),4)
+	NOMODS := proc seq poll hz jiffies jitbusy jitsched
+	NOMODS += jitqueue jitimer jitasklet jiwq
+	MODS := $(filter-out $(NOMODS),$(MODS))
+endif
 obj-m += $(patsubst %,%.o,$(MODS))
 TESTS := $(patsubst %,%_test,$(MODS))
 KDIR  ?= /lib/modules/$(shell uname -r)/build
