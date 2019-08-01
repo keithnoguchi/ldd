@@ -10,12 +10,21 @@
 #include <linux/mutex.h>
 #include <linux/slab.h>
 
+#define QUANTUM_SHIFT	PAGE_SHIFT
+#define QUANTUM_SIZE	PAGE_SIZE
+#define QVEC_SHIFT	(QUANTUM_SHIFT+9)
+#define QVEC_SIZE	(1L << QVEC_SHIFT)
+#define PTRS_PER_QVEC	PAGE_SIZE/sizeof(scullc_quantum_t)
+
 typedef void *scullc_quantum_t;
+
+struct scullc_qvec {
+	scullc_quantum_t	qvec[PTRS_PER_QVEC];
+};
 
 struct scullc_qset {
 	struct scullc_qset	*next;
-	scullc_quantum_t	qset[(PAGE_SIZE-sizeof(struct scullc_qset *))
-					/sizeof(scullc_quantum_t)];
+	struct scullc_qvec	*vec;
 } ____cacheline_aligned_in_smp;
 
 struct scullc_device {
@@ -29,24 +38,49 @@ static struct scullc_driver {
 	int			qset_size;
 	size_t			quantum_size;
 	struct kmem_cache	*quantums;
+	struct kmem_cache	*qvecs;
 	struct kmem_cache	*qsets;
 	dev_t			devt;
 	struct device_driver	base;
 	struct file_operations	fops;
 	struct scullc_device	devs[2];
 } scullc_driver = {
-	.qset_size	= sizeof(((struct scullc_qset *)0)->qset)/sizeof(scullc_quantum_t),
-	.quantum_size	= PAGE_SIZE,
+	.qset_size	= PTRS_PER_QVEC,
+	.quantum_size	= QUANTUM_SIZE,
 	.base.name	= "scullc",
 	.base.owner	= THIS_MODULE,
 };
+
+static struct scullc_qset *alloc_qset(struct scullc_driver *drv)
+{
+	struct scullc_qset *qset;
+	struct scullc_qvec *qvec;
+
+	qvec = kmem_cache_zalloc(drv->qvecs, GFP_KERNEL);
+	if (!qvec)
+		return NULL;
+	qset = kmem_cache_zalloc(drv->qsets, GFP_KERNEL);
+	if (!qset) {
+		kmem_cache_free(drv->qvecs, qvec);
+		return NULL;
+	}
+	qset->vec = qvec;
+	return qset;
+}
+
+static void free_qset(struct scullc_driver *drv, struct scullc_qset *qset)
+{
+	if (likely(qset->vec))
+		kmem_cache_free(drv->qvecs, qset->vec);
+	kmem_cache_free(drv->qsets, qset);
+}
 
 static struct scullc_qset *follow(struct scullc_device *dev, loff_t pos)
 {
 	struct scullc_driver *drv = container_of(dev->base.driver,
 						 struct scullc_driver,
 						 base);
-	int i, qset_pos = (pos+1)/(drv->qset_size*drv->quantum_size);
+	int i, qset_pos = pos/QVEC_SIZE;
 	struct scullc_qset *newp, **qsetp = &dev->qset;
 
 	for (i = 0; i < qset_pos; i++) {
@@ -54,14 +88,14 @@ static struct scullc_qset *follow(struct scullc_device *dev, loff_t pos)
 			qsetp = &(*qsetp)->next;
 			continue;
 		}
-		newp = kmem_cache_zalloc(drv->qsets, GFP_KERNEL);
+		newp = alloc_qset(drv);
 		if (!newp)
 			return NULL;
 		*qsetp = newp;
 		qsetp = &newp->next;
 	}
 	if (!*qsetp)
-		*qsetp = kmem_cache_zalloc(drv->qsets, GFP_KERNEL);
+		*qsetp = alloc_qset(drv);
 	return *qsetp;
 }
 
@@ -74,7 +108,7 @@ static void trim(struct scullc_device *dev)
 
 	for (qset = dev->qset; qset; qset = nextp) {
 		nextp = qset->next;
-		kmem_cache_free(drv->qsets, qset);
+		free_qset(drv, qset);
 	}
 }
 
@@ -179,26 +213,37 @@ static int init_driver(struct scullc_driver *drv)
 	if (IS_ERR(cache))
 		return PTR_ERR(cache);
 	drv->qsets = cache;
+	cache = KMEM_CACHE(scullc_qvec, 0);
+	if (IS_ERR(cache)) {
+		err = PTR_ERR(cache);
+		goto err;
+	}
+	drv->qvecs = cache;
 	cache = kmem_cache_create("scullc_quantum", drv->quantum_size,
 				  __alignof__(drv->quantum_size), 0, NULL);
 	if (IS_ERR(cache)) {
-		kmem_cache_destroy(drv->qsets);
-		return PTR_ERR(cache);
+		err = PTR_ERR(cache);
+		goto err;
 	}
 	drv->quantums = cache;
 	err = alloc_chrdev_region(&drv->devt, 0, ARRAY_SIZE(drv->devs),
 				  drv->base.name);
-	if (err) {
-		kmem_cache_destroy(drv->quantums);
-		kmem_cache_destroy(drv->qsets);
-		return err;
-	}
+	if (err)
+		goto err;
 	memset(&drv->fops, 0, sizeof(struct file_operations));
 	drv->fops.owner	= drv->base.owner;
 	drv->fops.read	= read;
 	drv->fops.write	= write;
 	drv->fops.open	= open;
 	return 0;
+err:
+	if (drv->quantums)
+		kmem_cache_destroy(drv->quantums);
+	if (drv->qvecs)
+		kmem_cache_destroy(drv->qvecs);
+	if (drv->qsets)
+		kmem_cache_destroy(drv->qsets);
+	return err;
 }
 
 static int __init init(void)
@@ -239,6 +284,7 @@ err:
 		cdev_device_del(&dev->cdev, &dev->base);
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	kmem_cache_destroy(drv->quantums);
+	kmem_cache_destroy(drv->qvecs);
 	kmem_cache_destroy(drv->qsets);
 	return err;
 }
@@ -256,6 +302,7 @@ static void __exit term(void)
 	}
 	unregister_chrdev_region(drv->devt, ARRAY_SIZE(drv->devs));
 	kmem_cache_destroy(drv->quantums);
+	kmem_cache_destroy(drv->qvecs);
 	kmem_cache_destroy(drv->qsets);
 }
 module_exit(term);
