@@ -2,8 +2,8 @@
 version: 2
 default: &defaults
   working_directory: /home/circleci/project/ldd
-  docker:
-    - image: keinohguchi/archlinux
+  machine:
+    image: ubuntu-1604:201903-01
 workflows:
   version: 2
   checkout_build_install:
@@ -20,24 +20,24 @@ jobs:
     <<: *defaults
     steps:
       - checkout
-      - run:
-          name: Install kernel source code
-          command: |
-            pacman -Sy --noconfirm linux linux-headers
       - persist_to_workspace:
-          root: /
-          paths:
-            - lib/modules/
-            - home/circleci/project/ldd
+          root: .
+          paths: .
   build:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /
-      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make
+          at: .
+      - run:
+          name: Install development package(s)
+          command: sudo apt install -y libelf-dev
+      - run: KDIR=/lib/modules/$(uname -r)/build make
   install:
     <<: *defaults
     steps:
       - attach_workspace:
-          at: /
-      - run: KDIR=$(ls -d /lib/modules/*-ARCH|head -1)/build make install
+          at: .
+      - run:
+          name: Install development package(s)
+          command: sudo apt install -y libelf-dev
+      - run: KDIR=/lib/modules/$(uname -r)/build sudo make install
