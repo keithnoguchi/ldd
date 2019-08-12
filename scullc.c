@@ -70,8 +70,16 @@ static struct scullc_qset *alloc_qset(struct scullc_driver *drv)
 
 static void free_qset(struct scullc_driver *drv, struct scullc_qset *qset)
 {
-	if (likely(qset->vec))
+	if (likely(qset->vec)) {
+		scullc_quantum_t *q = qset->vec->qvec;
+		scullc_quantum_t *end = q+PTRS_PER_QVEC;
+		while (q != end) {
+			if (*q)
+				kmem_cache_free(drv->quantums, *q);
+			q++;
+		}
 		kmem_cache_free(drv->qvecs, qset->vec);
+	}
 	kmem_cache_free(drv->qsets, qset);
 }
 
@@ -123,13 +131,25 @@ static ssize_t read(struct file *fp, char *__user buf, size_t count, loff_t *pos
 static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff_t *pos)
 {
 	struct scullc_device *dev = fp->private_data;
+	struct scullc_driver *drv = container_of(dev->base.driver,
+						 struct scullc_driver,
+						 base);
+	size_t qpos = *pos%QVEC_SIZE/QUANTUM_SIZE;
 	struct scullc_qset *qset;
+	scullc_quantum_t *data;
 	int ret;
 
 	if (mutex_lock_interruptible(&dev->lock))
 		return -ERESTARTSYS;
 	qset = follow(dev, *pos);
 	if (!qset) {
+		ret = -ENOMEM;
+		goto out;
+	}
+	data = &qset->vec->qvec[qpos];
+	if (!*data)
+		*data = kmem_cache_zalloc(drv->quantums, GFP_KERNEL);
+	if (!*data) {
 		ret = -ENOMEM;
 		goto out;
 	}
