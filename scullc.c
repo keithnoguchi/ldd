@@ -14,12 +14,10 @@
 #define QUANTUM_SIZE	PAGE_SIZE
 #define QVEC_SHIFT	(QUANTUM_SHIFT+9)
 #define QVEC_SIZE	(1L << QVEC_SHIFT)
-#define PTRS_PER_QVEC	PAGE_SIZE/sizeof(scullc_quantum_t)
-
-typedef void *scullc_quantum_t;
+#define PTRS_PER_QVEC	PAGE_SIZE/sizeof(void *)
 
 struct scullc_qvec {
-	scullc_quantum_t	qvec[PTRS_PER_QVEC];
+	void	*qvec[PTRS_PER_QVEC];
 };
 
 struct scullc_qset {
@@ -71,8 +69,8 @@ static struct scullc_qset *alloc_qset(struct scullc_driver *drv)
 static void free_qset(struct scullc_driver *drv, struct scullc_qset *qset)
 {
 	if (likely(qset->vec)) {
-		scullc_quantum_t *q = qset->vec->qvec;
-		scullc_quantum_t *end = q+PTRS_PER_QVEC;
+		void **q = qset->vec->qvec;
+		void **end = q+PTRS_PER_QVEC;
 		while (q != end) {
 			if (*q)
 				kmem_cache_free(drv->quantums, *q);
@@ -136,7 +134,7 @@ static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff
 						 base);
 	size_t qpos = *pos%QVEC_SIZE/QUANTUM_SIZE;
 	struct scullc_qset *qset;
-	scullc_quantum_t *data;
+	void **data;
 	int ret;
 
 	if (mutex_lock_interruptible(&dev->lock))
@@ -149,7 +147,7 @@ static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff
 	data = &qset->vec->qvec[qpos];
 	if (!*data)
 		*data = kmem_cache_zalloc(drv->quantums, GFP_KERNEL);
-	if (!*data) {
+	if (!data) {
 		ret = -ENOMEM;
 		goto out;
 	}
