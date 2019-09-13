@@ -9,6 +9,7 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/slab.h>
+#include <linux/uaccess.h>
 
 #define QUANTUM_SHIFT	PAGE_SHIFT
 #define QUANTUM_SIZE	PAGE_SIZE
@@ -132,9 +133,12 @@ static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff
 	struct scullc_driver *drv = container_of(dev->base.driver,
 						 struct scullc_driver,
 						 base);
-	size_t qpos = *pos%QVEC_SIZE/QUANTUM_SIZE;
+	size_t qpos = (*pos+1)%QVEC_SIZE/QUANTUM_SIZE;
+	size_t offset = *pos%QUANTUM_SIZE;
 	struct scullc_qset *qset;
 	void **data;
+	size_t rem;
+	void *ptr;
 	int ret;
 
 	if (mutex_lock_interruptible(&dev->lock))
@@ -147,11 +151,20 @@ static ssize_t write(struct file *fp, const char *__user buf, size_t count, loff
 	data = &qset->vec->qvec[qpos];
 	if (!*data)
 		*data = kmem_cache_zalloc(drv->quantums, GFP_KERNEL);
-	if (!data) {
+	if (!*data) {
 		ret = -ENOMEM;
 		goto out;
 	}
-	*pos += count;
+	if (offset+count > QUANTUM_SIZE)
+		count = QUANTUM_SIZE - offset;
+	ptr = *data+offset;
+	rem = count;
+	do {
+		size_t len = copy_from_user(ptr, buf, rem);
+		ptr += rem-len;
+		buf += rem-len;
+		rem = len;
+	} while (rem);
 	ret = count;
 out:
 	mutex_unlock(&dev->lock);
