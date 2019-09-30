@@ -9,6 +9,19 @@ static struct snull_driver {
 	struct net_device_ops	ops;
 } snull_driver;
 
+
+static int open(struct net_device *dev)
+{
+	printk("%s: open\n", netdev_name(dev));
+	return 0;
+}
+
+static int stop(struct net_device *dev)
+{
+	printk("%s: stop\n", netdev_name(dev));
+	return 0;
+}
+
 static void setup(struct net_device *dev)
 {
 	return;
@@ -17,6 +30,8 @@ static void setup(struct net_device *dev)
 static int init_driver(struct snull_driver *drv)
 {
 	memset(&drv->ops, 0, sizeof(struct net_device_ops));
+	drv->ops.ndo_open	= open;
+	drv->ops.ndo_stop	= stop;
 	return 0;
 }
 
