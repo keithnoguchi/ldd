@@ -36,6 +36,7 @@ MODS  += scullc
 # ldd bus based drivers
 MODS  += ldd
 MODS  += sculld
+MODS  += snull
 KMAJ  := $(shell uname -r|sed -e 's/\([0-9]\+\)\..*/\1/')
 ifeq ($(KMAJ),4)
 	NOMODS := proc seq poll hz jiffies jitbusy jitsched

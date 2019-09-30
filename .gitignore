@@ -2,6 +2,7 @@
 *_test
 *.o
 .*
+*.mod
 *.mod.c
 modules.*
 Module.*
