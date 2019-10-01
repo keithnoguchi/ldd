@@ -16,6 +16,7 @@
 struct test {
 	const char	*const name;
 	const char	*const dev;
+	size_t		bufsiz;
 	unsigned int	readers;
 	unsigned int	writers;
 };
@@ -31,7 +32,7 @@ static void *reader(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
-	char buf[BUFSIZ], path[PATH_MAX];
+	char buf[t->bufsiz], path[PATH_MAX];
 	int ret, fd;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -60,7 +61,7 @@ static void *writer(void *arg)
 {
 	struct context *ctx = arg;
 	const struct test *const t = ctx->t;
-	char buf[BUFSIZ], path[PATH_MAX];
+	char buf[t->bufsiz], path[PATH_MAX];
 	int ret, fd;
 
 	pthread_mutex_lock(&ctx->lock);
@@ -243,108 +244,126 @@ int main(void)
 		{
 			.name		= "1 writer on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 1,
 		},
 		{
 			.name		= "1 reader and 1 writer on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 1,
 			.writers	= 1,
 		},
 		{
 			.name		= "32 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 32,
 		},
 		{
 			.name		= "8 readers and 32 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 8,
 			.writers	= 32,
 		},
 		{
 			.name		= "16 readers and 32 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 16,
 			.writers	= 32,
 		},
 		{
 			.name		= "32 readers and 32 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 32,
 			.writers	= 32,
 		},
 		{
 			.name		= "64 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 64,
 		},
 		{
 			.name		= "32 readers and 64 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 32,
 			.writers	= 64,
 		},
 		{
 			.name		= "64 readers and 64 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 64,
 			.writers	= 64,
 		},
 		{
 			.name		= "256 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 256,
 		},
 		{
 			.name		= "128 readers and 256 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 128,
 			.writers	= 256,
 		},
 		{
 			.name		= "256 readers and 256 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 256,
 			.writers	= 256,
 		},
 		{
 			.name		= "1024 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 1024,
 		},
 		{
 			.name		= "512 readers and 1024 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 512,
 			.writers	= 1024,
 		},
 		{
 			.name		= "1024 readers and 1024 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 1024,
 			.writers	= 1024,
 		},
 		{
 			.name		= "2048 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 0,
 			.writers	= 2048,
 		},
 		{
 			.name		= "1024 readers and 2048 writers on sleepy0",
 			.dev		= "sleepy0",
+			.bufsiz		= 1,
 			.readers	= 1024,
 			.writers	= 2048,
 		},
 		{
 			.name		= "2048 readers and 2048 writers on sleepy1",
 			.dev		= "sleepy1",
+			.bufsiz		= 1,
 			.readers	= 2048,
 			.writers	= 2048,
 		},
