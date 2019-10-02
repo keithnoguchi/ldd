@@ -9,6 +9,10 @@ static struct snull_driver {
 	struct net_device_ops	ops;
 } snull_driver;
 
+static void setup(struct net_device *dev)
+{
+	dev->features |= NETIF_F_HW_CSUM;
+}
 
 static int open(struct net_device *dev)
 {
@@ -20,11 +24,6 @@ static int stop(struct net_device *dev)
 {
 	printk("%s: stop\n", netdev_name(dev));
 	return 0;
-}
-
-static void setup(struct net_device *dev)
-{
-	return;
 }
 
 static int init_driver(struct snull_driver *drv)

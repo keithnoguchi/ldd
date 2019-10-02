@@ -48,6 +48,7 @@ int main(void)
 		{.name = NULL},
 	};
 
+	ksft_set_plan(sizeof(tests)/sizeof(struct test)-1);
 	for (t = tests; t->name; t++) {
 		int ret, status;
 		pid_t pid;
